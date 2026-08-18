@@ -1,48 +1,48 @@
-# PrymGyroSort v0.1.3-finance — multi-stage container
-# Multi-objective weak-dominance ranking filter (GyroRank kernel)
-#
-# Build:  docker build -t prym-gyro-sort:0.1.3 .
-# Run:    docker run --rm -e N=4096 -e SEED=728 prym-gyro-sort:0.1.3
-# Finance: docker run --rm -e MODE=finance -e N=4096 prym-gyro-sort:0.1.3
+# PrymGyroSort — multi-stage production image
+# Portable ISA default (no -march=native). Optional MARCH=x86-64-v3.
+# No false OpenMP. Non-root quantoperator. promote_ready=false.
 
-# ---- Builder ----
-FROM debian:bookworm-slim AS builder
-
+FROM python:3.11-slim-bookworm AS builder
+ARG MARCH=
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        g++ make curl ca-certificates \
+        g++ make python3-dev \
     && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY cpp/include/ /build/cpp/include/
+COPY python/bindings/ /build/python/bindings/
+RUN pip install --no-cache-dir pybind11 numpy setuptools wheel
+WORKDIR /build/python/bindings
+RUN if [ -n "$MARCH" ]; then \
+      g++ -O3 -shared -std=c++17 -fPIC -fvisibility=hidden -march=${MARCH} \
+        $(python3 -m pybind11 --includes) -I/build/cpp/include \
+        $(python3 -c "import numpy; print('-I'+numpy.get_include())") \
+        prym_gyro_bind.cpp -o prym_gyro_native.so ; \
+    else \
+      g++ -O3 -shared -std=c++17 -fPIC -fvisibility=hidden \
+        $(python3 -m pybind11 --includes) -I/build/cpp/include \
+        $(python3 -c "import numpy; print('-I'+numpy.get_include())") \
+        prym_gyro_bind.cpp -o prym_gyro_native.so ; \
+    fi
+WORKDIR /build
+COPY cpp/ /build/cpp/
+RUN g++ -O3 -std=c++17 -Icpp/include cpp/rank_driver.cpp -o /build/rank_driver
 
-WORKDIR /src
-COPY cpp/ cpp/
-
-# Optional pdqsort (variadic GYRO_SORT handles lambdas)
-RUN curl -fsSL https://raw.githubusercontent.com/orlp/pdqsort/master/pdqsort.h \
-      -o cpp/include/pdqsort.h || true
-
-RUN g++ -O3 -std=c++17 -Icpp/include cpp/rank_driver.cpp -o /usr/local/bin/rank_driver
-
-# ---- Runtime ----
-FROM debian:bookworm-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-numpy libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /usr/local/bin/rank_driver /usr/local/bin/rank_driver
-COPY python/ /opt/prym-gyro/python/
-COPY NON_CLAIMS.md README.md LICENSE /opt/prym-gyro/
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-
-RUN chmod +x /usr/local/bin/rank_driver /usr/local/bin/entrypoint.sh \
- && useradd -m -u 10001 prym \
- && mkdir -p /work && chown prym:prym /work
-
-USER prym
-WORKDIR /work
-
-ENV N=4096
-ENV SEED=728
-ENV MODE=synthetic
-ENV MEMORY_PRESSURE=0
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+FROM python:3.11-slim-bookworm AS runner
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 quantgroup \
+    && useradd -u 10001 -g quantgroup -m -s /usr/sbin/nologin quantoperator
+WORKDIR /app
+RUN pip install --no-cache-dir numpy
+COPY --from=builder /build/python/bindings/prym_gyro_native.so /app/python/bindings/
+COPY --from=builder /build/rank_driver /usr/local/bin/rank_driver
+COPY python/ /app/python/
+COPY NON_CLAIMS.md README.md LICENSE /app/
+RUN mkdir -p /app/work /app/docs /app/python/bindings \
+    && chown -R quantoperator:quantgroup /app \
+    && chmod +x /usr/local/bin/rank_driver
+ENV PYTHONPATH=/app/python:/app/python/bindings
+USER quantoperator
+WORKDIR /app/work
+ENTRYPOINT ["python3", "/app/python/prym_sieve_cli.py"]
+CMD ["--n", "4096", "--seed", "42"]
