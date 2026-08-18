@@ -5,4 +5,18 @@ services:
       N: "4096"
       SEED: "728"
     volumes:
-      - ./out:/work
+      - ./work:/work
+
+  # Isolated Visualization Profile (Path A) — never builds the C++ core.
+  # Usage:  docker compose --profile viz run --rm viz
+  # Expects ranks.bin + matrix.bin already present under ./work
+  viz:
+    profiles: ["viz"]
+    image: python:3.11-slim
+    working_dir: /work
+    volumes:
+      - ./work:/work
+      - ./python:/opt/viz:ro
+    command: >
+      sh -c "pip install -q numpy &&
+             python /opt/viz/viz_pareto.py --dir /work --format both"
