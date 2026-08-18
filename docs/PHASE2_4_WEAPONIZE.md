@@ -1,30 +1,12 @@
-# Phases 2–4 — Native profile, richer objectives, streaming
+# Phases 2–4 (honesty-hardened)
 
-**Core `gyro_rank.hpp`:** frozen.  
-**Honesty:** execution sieve only — `promote_ready=false`.
-
-## Phase 2 — Native / OpenMP
+Rank path is **sequential** (no `#pragma omp` in Fenwick/LowAux).
 
 ```bash
-make                  # portable
-make native           # -march=native -fopenmp
-make binding-native   # PRYM_NATIVE=1 .so
-```
-
-Docker default stays portable.
-
-## Phase 3 — Richer finance objectives (v0.1.4)
-
-Opportunity (dislocation + OBI) vs risk (liquidity + MDD proxy).
-
-## Phase 4 — Streaming scaffold
-
-```bash
+make native           # -march=native
+make native-omp       # optional fopenmp link; does not parallelize rank loops
+make binding-native
 python3 python/stream_loop.py --window 4096 --interval-ms 100 --duration 2
 ```
 
-Inject live rows via `RankStream.push_row(...)`. No exchange credentials shipped.
-
-## Non-claims
-
-Not a trading bot. Not alpha. See `NON_CLAIMS.md`.
+`promote_ready=false`. Not alpha. Not a trading bot.
