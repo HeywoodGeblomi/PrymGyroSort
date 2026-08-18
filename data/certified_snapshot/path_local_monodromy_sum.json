@@ -1,0 +1,12 @@
+{
+  "id": "path_local_monodromy_sum_seed728",
+  "status": "certified",
+  "claim": "Along the combinatorial Rauzy path of seed 728 (99962 dual moves), under a controlled QR error model, the positive-sum lies in [1.599945, 1.611119], which contains 8/5. Scope: this monodromy under the stated model. Does not replace Chen-Moller; individual lambda2, lambda3 not formal bounds.",
+  "pos_sum_interval": [1.599945, 1.611119],
+  "contains_EKZ_8_5": true,
+  "seed": 728,
+  "n_moves": 99962,
+  "teichmueller_time": 311.7,
+  "min_decision_gap": 0.002985,
+  "EKZ_8_5": 1.6
+}

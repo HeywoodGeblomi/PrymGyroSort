@@ -1,0 +1,12 @@
+{
+  "title": "Path-local λ2, λ3 from seed-728 certificate",
+  "scope": "PATH-LOCAL only. Not global exponents.",
+  "seed": 728,
+  "lambda2_mid": 0.4817,
+  "lambda3_mid": 0.1238,
+  "sum23_mid": 0.6055,
+  "pos_sum_interval": [1.599945, 1.611119],
+  "contains_8_5": true,
+  "promote_ready": false,
+  "claim": "PATH-LOCAL: seed-728 spectrum mids λ2≈0.4817, λ3≈0.1238; pos sum interval contains 8/5 under QR model. Not a global claim."
+}
