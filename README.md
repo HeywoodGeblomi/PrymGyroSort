@@ -1,82 +1,102 @@
-# PrymGyroSort v0.1.1-prototype
+# PrymGyroSort v0.1.3-finance
 
-**Prototype Sorter — multi-objective geometric ranking filter**
+**Multi-objective ranking filter** — weak-dominance isolation of high-value candidates under competing objectives.
 
-| Role | Source |
-|------|--------|
-| Array structure | [prym-eigenform-pipeline-d12](https://github.com/HeywoodGeblomi/prym-eigenform-pipeline-d12) (period vectors of $S(1,-2)$, path-local dual Rauzy evaluation streams) |
-| Sorter kernel | [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) (adaptive multi-objective ranking, GyroController + FenwickMax exact 2-D weak-dominance) |
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Container](https://img.shields.io/badge/container-docker-2496ED?logo=docker&logoColor=white)](#containerized)
+[![Honesty](https://img.shields.io/badge/honesty-NON__CLAIMS-important)](NON_CLAIMS.md)
+
+| Layer | Source |
+|-------|--------|
+| Ranking kernel | [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) — GyroController + FenwickMax / LowAux2D |
+| Geometric wire | [prym-eigenform-pipeline-d12](https://github.com/HeywoodGeblomi/prym-eigenform-pipeline-d12) path-local dual-Rauzy streams |
+| Domain adapters | Finance pair-filter · synthetic / certified geometric ensemble |
 
 ## What it does
 
-1. Generates an ensemble of geometric evaluation points (certificate-anchored + residual cloud).
-2. Each point carries **M = 2 objectives** (lower = better):
-   - **obj0**: convergence residual $|\text{local pos-sum proxy} - 8/5|$
-   - **obj1**: controlled QR / geometric residual proxy
-3. Feeds the $N \times 2$ matrix into `gyro::execute_gyro_rank`.
-4. Returns weak-dominance ranks → Pareto-style isolation of the cleanest path-local seeds / segments.
+1. Accepts an **N × 2** objective matrix (`matrix.bin`, lower = better).
+2. Ranks points by **weak dominance** (Pareto-style layers).
+3. Isolates the cleanest candidates on the rank-1 / top-fraction front.
+
+The C++ core is domain-agnostic. Python sidecars map geometry or market features into the frozen binary contract.
 
 ## Honesty (mandatory)
 
 Read **[NON_CLAIMS.md](NON_CLAIMS.md)** before citing or promoting.
 
-- Path-local engineered class only.
-- Does **not** claim global individual Lyapunov exponents $\lambda_2=2/5$, $\lambda_3=1/5$.
-- Does **not** claim ownership of the sum $8/5$ (Chen–Möller).
-- EXTERNAL-clean / no-$\chi$. Not a classical 1-D comparison sort.
-- Synthetic generator is certificate-anchored for self-check; live pure-path wiring is follow-on.
-
-## Scale & Memory Boundaries (v0.1.1-prototype)
-
-* **Gating Threshold:** At $N \ge 65536$ or when `memory_pressure` is manually invoked, the `GyroController` explicitly flags a strategy deflection from the high-throughput `FenwickMax` path to the `LowAux2D` kernel.
-* **Auxiliary Space Integrity:** The `LowAux2D` fallback preserves the $O(N \log N)$ time complexity but enforces rigid, low-overhead array bounds. Sub-linear auxiliary space ranking ($o(N)$) is explicitly **not claimed** and remains future work.
-* **Measured footprint:** N=4096 ≈ 1.5–2 ms (Fenwick); N=65536 + memory_pressure ≈ 40 ms (LowAux path). Certificate-anchored anchors remain isolated (recall 1.0).
-* **Spectral Disconnect:** Running at higher $N$ scales local resolution, but `promote_ready` remains strictly **false** for any global spectral or Lyapunov exponent claims.
-
-See [docs/SCALE_NOTES.md](docs/SCALE_NOTES.md).
+- Path-local / engineered class for geometric mode; execution sieve only for finance.
+- Does **not** claim global Lyapunov exponents or ownership of 8/5.
+- Does **not** generate trading alpha or guarantee profitable trades.
+- EXTERNAL-clean / no-χ. Not a classical 1-D comparison sort.
+- `promote_ready = false` for global spectral or live-trading claims.
 
 ## Quick start (local)
 
 ```bash
-python3 python/generate_geometric_matrix.py --n 4096 --seed 728 --out-dir work
+# Geometric / synthetic
+python3 python/live_path_wire.py --mode synthetic --n 4096 --seed 728 --out-dir work
 g++ -O3 -std=c++17 -Icpp/include cpp/rank_driver.cpp -o work/rank_driver
 ./work/rank_driver work/matrix.bin 4096 2 work
 python3 python/self_check.py --dir work
-```
 
-Or pure demo:
-
-```bash
-g++ -O3 -std=c++17 -Iinclude examples/prym_gyro_demo.cpp -o prym_gyro_demo
-./prym_gyro_demo 4096 48 0
-./prym_gyro_demo 65536 128 1   # memory_pressure
+# Finance pair-filter sieve
+python3 python/protocol_finance.py --out-dir work --n 4096 --seed 42
+./work/rank_driver work/matrix.bin 4096 2 work
+python3 python/viz_pareto.py --dir work --format both
 ```
 
 ## Containerized
 
 ```bash
-docker build -t prym-gyro-sort:0.1.1 .
-docker run --rm -e N=4096 -e SEED=728 prym-gyro-sort:0.1.1
+docker build -t prym-gyro-sort:0.1.3 .
+
+# Geometric synthetic (default)
+docker run --rm -e N=4096 -e SEED=728 -v "$PWD/work:/work" prym-gyro-sort:0.1.3
+
+# Finance adapter
+docker run --rm -e MODE=finance -e N=4096 -e SEED=42 -v "$PWD/work:/work" prym-gyro-sort:0.1.3
+
+# Compose
+docker compose run --rm prym-gyro-rank
+docker compose --profile finance run --rm finance
+docker compose --profile viz run --rm viz   # after ranking has filled ./work
 ```
 
-## Self-check criteria
+## Measured scaling (LowAux2D, `memory_pressure=1`)
 
-- ≥ 60% of certificate-anchored low-residual points in top 5% ranks
-- Mean rank of good anchors < mean rank of residual cloud
-- Soft timing gate from rank_report (optional)
+| N | Wall time | Top-frac recall | Separation gap |
+|---:|---:|---:|---:|
+| 65,536 | ~38 ms | 1.000 | +230.7 |
+| 262,144 | ~198 ms | 1.000 | +449.4 |
+| 1,048,576 | ~1188 ms | 1.000 | +898.8 |
 
-Measured: **GREEN** at N=4096 and N=65536.
+Full table: [docs/SCALING_RESULTS.md](docs/SCALING_RESULTS.md).  
+Asymptotic o(N) auxiliary ranking is **not claimed**.
 
 ## Layout
 
 ```
 PrymGyroSort/
-├── README.md / NON_CLAIMS.md / LICENSE
-├── Dockerfile / docker-compose.yml / entrypoint.sh
-├── cpp/rank_driver.cpp + include/gyro_rank.hpp
-├── python/generate_geometric_matrix.py + self_check.py
+├── README.md  NON_CLAIMS.md  LICENSE  RELEASE_NOTES.md
+├── Dockerfile  docker-compose.yml  entrypoint.sh
+├── cpp/
+│   ├── rank_driver.cpp
+│   └── include/gyro_rank.hpp
+├── python/
+│   ├── live_path_wire.py       # Path-2 geometric / certified wire
+│   ├── protocol_finance.py     # Finance pair-filter adapter
+│   ├── viz_pareto.py           # Path-A ASCII + HTML Pareto
+│   ├── scaling_campaign.py     # Measurement harness
+│   ├── self_check.py
+│   └── generate_geometric_matrix.py
 ├── examples/prym_gyro_demo.cpp
-└── docs/SCALE_NOTES.md
+├── data/certified_snapshot/    # seed-728 path-local monodromy
+└── docs/
+    ├── PROTOCOL_FINANCE.md
+    ├── PATH2_LIVE_WIRE.md
+    ├── PATH_A_VIZ.md
+    ├── SCALING_HARNESS.md
+    └── SCALING_RESULTS.md
 ```
 
 ## Credits
