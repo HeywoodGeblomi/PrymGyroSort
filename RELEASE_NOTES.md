@@ -1,39 +1,43 @@
-# Release Notes — PrymGyroSort v0.1.3-finance
+# Release Notes — PrymGyroSort v0.1.4-sieve
 
-**Tag:** `v0.1.3-finance`  
+**Tag (create in UI):** `v0.1.4-sieve`  
+**Commit basis:** `main` @ `f3cdf7ec`+ (CLI ensemble fix)  
 **Date:** 2026-08-18
 
 ## Highlights
 
-- **Finance protocol adapter** — pair-filter execution sieve (`protocol_finance.py`)
-- **Path-2 live wire** — certified / live / synthetic geometric streams
-- **Path-A visualization** — zero-dependency ASCII + inline-SVG Pareto sidecar
-- **Scaling campaign** — LowAux2D measured through N=2^20 (recall 1.0 held)
-- **Container** — multi-stage Docker image, compose profiles (`finance`, `viz`)
+- **Production sieve CLI** — `python/prym_sieve_cli.py` (static OR-quantile + native M=2, optional multi-worker)
+- **Zero-copy pybind11 binding** — C-contiguous `(N,2)` only; hard reject non-contig / wrong shape / dtype
+- **Multi-stage Docker** — non-root `quantoperator`, portable ISA default (no `-march=native` / no OpenMP myths)
+- **Coarse quantile prefilter** — measured ~2.5× pipeline speedup; R@1/R@top = 1.0 on suite; anchor filter killed
+- **Binding iron** — 11/11 single-process; 400/400 illegal catches under 4-worker parallel stress
+- **Durability horizon** — 500-tick production-path tracker (local S@top≈0.60; origin front high turnover)
+- **Kinetic A/B** — velocity transform **does not ship** (27/27 no durability gain)
+- **M=3 lab only** — exact 3-D ranks in Python; **no** `rank_m3` native; static 3-axis quantile preferred over DQVA
 
-## Performance snapshot
+## Verified container smoke (host Docker)
 
-| Mode | N | Time | Notes |
-|------|---:|------|-------|
-| Finance synthetic | 4096 | ~2.9 ms | recall 1.0, gap +58 |
-| Geometric LowAux2D | 65536 | ~38 ms | recall 1.0 |
-| Geometric LowAux2D | 1e6 | ~1.2 s | recall 1.0, gap +899 |
+```text
+[sieve] path=quantile_q=0.25  n'=1755  ms≈1.0  min_rank=1
+work/ranks.npy + work/report.json written via volume mount
+```
+
+```bash
+docker build -t prym-gyro-sieve:latest .
+docker run --rm prym-gyro-sieve:latest --n 4096 --seed 42
+```
 
 ## Honesty
 
-`promote_ready = false` for global spectral claims and live-trading profitability.  
+`promote_ready = false`  
+Execution sieve only — not alpha, not order routing, not global spectral claims.  
 See [NON_CLAIMS.md](NON_CLAIMS.md).
 
-## Container
+## Core
 
-```bash
-docker build -t prym-gyro-sort:0.1.3 .
-docker run --rm -e MODE=finance -e N=4096 -v "$PWD/work:/work" prym-gyro-sort:0.1.3
-```
+`cpp/include/gyro_rank.hpp` remains the frozen M=2 weak-dominance kernel.
 
-## Upgrade from v0.1.1
+## Prior
 
-- New: `python/protocol_finance.py`, `python/viz_pareto.py`, `python/scaling_campaign.py`, `python/live_path_wire.py`
-- New docs under `docs/`
-- Dockerfile / entrypoint aligned to `rank_driver <matrix> <N> <M> <out_dir> [pressure]`
-- Core `gyro_rank.hpp` unchanged
+- **v0.1.3-finance** — finance adapter + Path-2 wire + viz + scaling campaign  
+- **v0.1.1-prototype** — memory-hardened LowAux2D gating
