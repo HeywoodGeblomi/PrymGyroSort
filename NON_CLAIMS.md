@@ -1,4 +1,4 @@
-# NON_CLAIMS — PrymGyroSort v0.1.1-prototype
+# NON_CLAIMS — PrymGyroSort v0.1.2-path2
 
 ## Mandatory honesty framing
 
@@ -19,27 +19,33 @@
    No internal irreversible state, no hidden commitment bit, no $\chi$-style non-reducible memory.  
    All decisions are driven by visible objectives only.
 
-5. **Synthetic generator.**  
-   The self-check generator produces certificate-anchored synthetic points inspired by the published seed-728 path-local interval.  
-   Wiring of the live pure-path dual-Rauzy evaluator from `prym-eigenform-pipeline-d12` is a deliberate next step, not claimed complete here.
+5. **`promote_ready = false` for global spectral claims.**  
+   Higher $N$ only increases local trajectory resolution of the engineered ensemble. It does not unlock global Lyapunov certificates.
 
-6. **Promotion scope.**  
-   Containerized + self-check GREEN means the integration prototype is reproducible and the ranking semantics are verified on the engineered class.  
-   It does **not** mean a foundational advance in Teichmüller dynamics or a field-level sorting result.
+## Live-Path Wire (Path 2)
 
-## Scale & Memory Boundaries (v0.1.1-prototype)
+* **Default mode (`certified`):** ensemble anchored on the vendored seed-728 Diagram B path-local monodromy certificate (`pos_sum $\in$ [1.599945, 1.611119]`, contains $8/5$ under the stated QR model). Self-contained via `data/certified_snapshot/`.
+* **`live` mode:** optional import of `prym-eigenform-pipeline-d12` pure dual-Rauzy recording (`scripts.lambda23_pure_path`). Falls back to certified if the package is not available.
+* **`synthetic` mode:** legacy certificate-anchored generator (CI / offline fallback).
+* **Still path-local only.** Live streams do **not** promote global Lyapunov claims.
+* **`promote_ready` remains false** for any global spectral statement until isolation metrics are deliberately re-measured on live trajectories under the same self-check gates.
 
-* **Gating Threshold:** At $N \ge 65536$ or when `memory_pressure` is manually invoked, the `GyroController` explicitly flags a strategy deflection from the high-throughput `FenwickMax` path to the `LowAux2D` kernel.
-* **Auxiliary Space Integrity:** The `LowAux2D` fallback preserves the $O(N \log N)$ time complexity but enforces rigid, low-overhead array bounds. Sub-linear auxiliary space ranking ($o(N)$) is explicitly **not claimed** and remains future work.
-* **Measured footprint (this class):** N=4096 ≈ 1.5–2 ms (Fenwick); N=65536 + memory_pressure ≈ 40 ms (LowAux path). Certificate-anchored anchors remain isolated (recall 1.0; mean rank good ≪ rest).
-* **Spectral Disconnect:** Running at higher $N$ scales the local resolution of the trajectory path, but `promote_ready` remains strictly **false** for any global spectral or Lyapunov exponent claims.
+See `docs/PATH2_LIVE_WIRE.md` for the stream contract and usage.
+
+## Scale & Memory Boundaries (v0.1.1+)
+
+* **Gating Threshold:** At $N \ge 65536$ or when `memory_pressure` is manually invoked, the `GyroController` flags a strategy deflection from `FenwickMax` to `LowAux2D`.
+* **Auxiliary Space Integrity:** LowAux2D preserves $O(N \log N)$ time with rigid low-overhead bounds. Sub-linear auxiliary ranking ($o(N)$) is **not claimed**.
+* **Measured footprint (this class):** N=4096 ≈ 1.5–2 ms (Fenwick); N=65536 + memory_pressure ≈ 40 ms (LowAux). Certificate-anchored anchors remain isolated (recall 1.0; mean rank good ≪ rest).
+* **Spectral Disconnect:** Higher $N$ scales local resolution only; `promote_ready` stays **false** for global spectral claims.
 
 ## What you may cite
 
 - The integration pattern: geometric multi-objective points from a residual-0 Prym scaffold ranked by an adaptive GyroController / FenwickMax kernel.
-- Self-check behaviour on synthetic low-residual vs high-residual clouds.
+- Self-check behaviour on certified / synthetic low-residual vs high-residual clouds.
 - Container reproducibility of the ranking pipeline.
 - Scale deflection behavior at N≥65536 under memory_pressure.
+- Path-2 live-wire adapter as a stream interface to path-local dual-Rauzy artefacts (not as a global spectrum engine).
 
 ## What you must not cite this as
 
