@@ -1,0 +1,8 @@
+services:
+  prym-gyro-rank:
+    build: .
+    environment:
+      N: "4096"
+      SEED: "728"
+    volumes:
+      - ./out:/work
