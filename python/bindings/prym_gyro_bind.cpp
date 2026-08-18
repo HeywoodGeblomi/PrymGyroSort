@@ -1,6 +1,6 @@
 /**
  * PrymGyroSort zero-copy binding (hardened)
- * C-contiguous required — non-contiguous raises (no silent copy).
+ * Requires C-contiguous float64 matrix with shape (N, 2). No silent copy.
  */
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -15,8 +15,9 @@ namespace {
 void require_c_contiguous_matrix(const py::buffer_info& mbuf) {
     if (mbuf.ndim != 2)
         throw std::invalid_argument("matrix must be 2-D (N, M)");
-    if (mbuf.shape[1] < 1)
-        throw std::invalid_argument("matrix M must be >= 1");
+    if (mbuf.shape[1] != 2)
+        throw std::invalid_argument(
+            "matrix must have shape (N, 2); M!=2 is not supported on the fast path");
     const ssize_t item = static_cast<ssize_t>(mbuf.itemsize);
     if (item != static_cast<ssize_t>(sizeof(double)))
         throw std::invalid_argument("matrix must be float64");
@@ -61,7 +62,6 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
     const auto n = static_cast<uint32_t>(mbuf.shape[0]);
     const auto m = static_cast<uint32_t>(mbuf.shape[1]);
     rank_numpy(matrix, ranks, memory_pressure);
-
     gyro::GyroController ctrl;
     ctrl.observe(static_cast<const double*>(mbuf.ptr), n, m, memory_pressure);
     const auto strat = ctrl.gate();
@@ -78,6 +78,7 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
     out["strategy"] = strat_name;
     out["zerocopy"] = true;
     out["c_contiguous_required"] = true;
+    out["shape_required"] = "(N, 2)";
     out["scope"] = "path-local / execution-sieve only; promote_ready=false";
     return out;
 }
@@ -85,7 +86,7 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
 }  // namespace
 
 PYBIND11_MODULE(prym_gyro_native, m) {
-    m.doc() = "PrymGyroSort zero-copy binding. C-contiguous float64 required (no silent copy).";
+    m.doc() = "PrymGyroSort zero-copy binding. Requires C-contiguous (N,2) float64.";
     m.def("rank", &rank_numpy, py::arg("matrix"), py::arg("ranks"),
           py::arg("memory_pressure") = false);
     m.def("rank_report", &rank_numpy_report, py::arg("matrix"), py::arg("ranks"),
