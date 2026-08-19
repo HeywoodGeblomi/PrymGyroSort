@@ -1,30 +1,46 @@
-# Release Notes — PrymGyroSort v0.1.4-sieve
+# Release Notes — PrymGyroSort v0.1.5-sieve
 
-**Tag (create in UI):** `v0.1.4-sieve`  
-**Commit basis:** `main` @ `f3cdf7ec`+ (CLI ensemble fix)  
-**Date:** 2026-08-18
+**Tag:** [`v0.1.5-sieve`](https://github.com/HeywoodGeblomi/PrymGyroSort/releases/tag/v0.1.5-sieve)  
+**Branch tip:** `main`  
+**Date:** 2026-08-19
 
 ## Highlights
 
-- **Production sieve CLI** — `python/prym_sieve_cli.py` (static OR-quantile + native M=2, optional multi-worker)
-- **Zero-copy pybind11 binding** — C-contiguous `(N,2)` only; hard reject non-contig / wrong shape / dtype
-- **Multi-stage Docker** — non-root `quantoperator`, portable ISA default (no `-march=native` / no OpenMP myths)
-- **Coarse quantile prefilter** — measured ~2.5× pipeline speedup; R@1/R@top = 1.0 on suite; anchor filter killed
-- **Binding iron** — 11/11 single-process; 400/400 illegal catches under 4-worker parallel stress
-- **Durability horizon** — 500-tick production-path tracker (local S@top≈0.60; origin front high turnover)
-- **Kinetic A/B** — velocity transform **does not ship** (27/27 no durability gain)
-- **M=3 lab only** — exact 3-D ranks in Python; **no** `rank_m3` native; static 3-axis quantile preferred over DQVA
+### Production hardening
+- Structured **exit codes**: 0 ok · 1 usage · 2 data · 3 runtime · 4 self-check fail
+- Matrix guards: shape `(N,2)`, NaN/Inf reject, empty reject, file size match
+- `--self-check` — ensemble / quantile / full / reject-NaN
+- `--json` — machine-readable stdout
+- Docker: multi-stage, non-root `quantoperator`, portable ISA, **HEALTHCHECK**
 
-## Verified container smoke (host Docker)
+### Finance expansion
+Profiles on `protocol_finance.py` (structural sieve — **not alpha**):
+
+| Profile | Emphasis |
+|---------|----------|
+| `pairs` | dislocation × OBI vs liquidity/MDD |
+| `liquidity` | depth / spread resilience |
+| `stress` | drawdown / gap risk |
+| `micro` | OBI×dislocation pressure vs friction |
+
+### Carried forward from v0.1.4
+- Production sieve CLI (quantile + native M=2)
+- Zero-copy pybind11 binding (C-contiguous only)
+- Binding iron (400/400 illegal catches under parallel stress)
+- Durability horizon tracker
+
+## Verified container smoke
 
 ```text
-[sieve] path=quantile_q=0.25  n'=1755  ms≈1.0  min_rank=1
-work/ranks.npy + work/report.json written via volume mount
+[sieve] self-check PASS version=0.1.5-sieve
+[finance] 0.1.5 profile=stress n=4096 promote_ready=false
+{"ok": true, "path": "quantile_q=0.25", "min_rank": 1, ...}
 ```
 
 ```bash
 docker build -t prym-gyro-sieve:latest .
-docker run --rm prym-gyro-sieve:latest --n 4096 --seed 42
+docker run --rm prym-gyro-sieve:latest --self-check
+docker run --rm prym-gyro-sieve:latest --n 4096 --seed 42 --json
 ```
 
 ## Honesty
@@ -37,7 +53,8 @@ See [NON_CLAIMS.md](NON_CLAIMS.md).
 
 `cpp/include/gyro_rank.hpp` remains the frozen M=2 weak-dominance kernel.
 
-## Prior
+## Prior tags
 
-- **v0.1.3-finance** — finance adapter + Path-2 wire + viz + scaling campaign  
-- **v0.1.1-prototype** — memory-hardened LowAux2D gating
+- **v0.1.4-sieve** — production CLI + Docker iron
+- **v0.1.3-finance** — first finance adapter
+- **v0.1.1-prototype** — LowAux2D memory gating
