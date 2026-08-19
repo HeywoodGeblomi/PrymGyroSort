@@ -1,8 +1,11 @@
 /**
  * @file gyro_rank.hpp
- * @brief GyroRank — Elite Gyroscopic Ranking Optimizer (v0.1)
- * Vendored into PrymGyroSort; GYRO_SORT is variadic for lambda safety.
- * Upstream: https://github.com/HeywoodGeblomi/GyroRank
+ * @brief GyroRank — 2-D weak-dominance layer ranking (Fenwick / LowAux2D)
+ * Vendored into PrymGyroSort. Upstream: https://github.com/HeywoodGeblomi/GyroRank
+ *
+ * Ranking semantics: NSGA-II-style successive nondominated fronts (layer ranks),
+ * lower-better on both objectives. Verified against independent O(N^2) oracle
+ * (see docs/RANK_VERIFICATION.md).
  */
 #pragma once
 
@@ -138,25 +141,17 @@ inline void exact_rank_2d_fenwick(const double* matrix, uint32_t n, uint32_t m,
               });
     FenwickMax fenwick(max_y + 2);
     FenwickSum fenwick_cnt(max_y + 2);
-    uint32_t i = 0;
-    while (i < n) {
-        uint32_t j = i;
-        double x0 = matrix[order[i] * m + 0];
-        while (j < n && matrix[order[j] * m + 0] == x0) ++j;
-        for (uint32_t k = i; k < j; ++k) {
-            uint32_t idx = order[k];
-            uint32_t yr  = y_rank[idx];
-            int32_t better = fenwick.prefix_max(static_cast<int32_t>(yr));
-            int32_t cnt    = fenwick_cnt.prefix_sum(static_cast<int32_t>(yr));
-            if (better > 0) ranks_out[idx] = better + 1;
-            if (dom_out)    dom_out[idx]   = cnt;
-        }
-        for (uint32_t k = i; k < j; ++k) {
-            uint32_t idx = order[k];
-            fenwick.update(y_rank[idx], ranks_out[idx]);
-            fenwick_cnt.add(y_rank[idx], 1);
-        }
-        i = j;
+    // Sequential in (x asc, y asc): exclusive y prefix so equal-y does not
+    // self-dominate; immediate update so equal-x better-y dominates worse-y.
+    for (uint32_t k = 0; k < n; ++k) {
+        uint32_t idx = order[k];
+        uint32_t yr  = y_rank[idx];
+        int32_t better = fenwick.prefix_max(static_cast<int32_t>(yr) - 1);
+        int32_t cnt    = fenwick_cnt.prefix_sum(static_cast<int32_t>(yr) - 1);
+        if (better > 0) ranks_out[idx] = better + 1;
+        if (dom_out)    dom_out[idx]   = cnt;
+        fenwick.update(yr, ranks_out[idx]);
+        fenwick_cnt.add(yr, 1);
     }
 }
 
@@ -233,7 +228,8 @@ public:
     }
     Strategy gate() const {
         const auto& f = feats_;
-        if (f.m <= 1 || (f.m == 2 && f.sortedness_0 > 0.97 && f.n < 4096))
+        // Insertion1D is 1-objective only. Never for M>=2 (antichains / monotone obj0).
+        if (f.m <= 1)
             return Strategy::Insertion1D;
         if (f.m == 2) {
             if (f.memory_pressure || f.density_product > (1u << 26))
