@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch return + risk via Yahoo chart HTTP API (no yfinance/curl_cffi). Not advice."""
+"""Fetch return + risk via Yahoo chart HTTP API (no yfinance). Not advice."""
 from __future__ import annotations
 
 import argparse
@@ -13,14 +13,13 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TICKERS = [
-    "SNDK", "LITE", "CAT", "GEV", "MU", "RKLB", "TSLA",
+    "CRAK", "LITE", "CAT", "GEV", "MU", "RKLB", "TSLA",
     "NVDA", "ETN", "ZS", "BE", "DELL", "MRVL",
 ]
 HTTP_TIMEOUT = 10
 
 
-def _closes_from_yahoo(ticker: str) -> np.ndarray | None:
-    """Daily adjusted closes via chart API. Hard socket timeout."""
+def _closes_from_yahoo(ticker: str):
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
         f"?range=6mo&interval=1d&events=div%2Csplits"
@@ -39,8 +38,7 @@ def _closes_from_yahoo(ticker: str) -> np.ndarray | None:
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, ValueError):
         return None
     try:
-        result = payload["chart"]["result"][0]
-        quote = result["indicators"]["quote"][0]
+        quote = payload["chart"]["result"][0]["indicators"]["quote"][0]
         closes = quote.get("close") or []
         arr = np.array([c for c in closes if c is not None], dtype=np.float64)
         return arr if arr.size >= 10 else None
@@ -48,7 +46,7 @@ def _closes_from_yahoo(ticker: str) -> np.ndarray | None:
         return None
 
 
-def _scores_from_closes(closes: np.ndarray, lookback_days: int) -> tuple[float, float]:
+def _scores_from_closes(closes, lookback_days: int):
     window = closes[-min(lookback_days, len(closes)) :]
     ret = float(window[-1] / window[0] - 1.0)
     daily = np.diff(window) / window[:-1]
@@ -56,7 +54,7 @@ def _scores_from_closes(closes: np.ndarray, lookback_days: int) -> tuple[float, 
     return ret, vol
 
 
-def fetch_scores(tickers: list[str], lookback_days: int = 63) -> pd.DataFrame:
+def fetch_scores(tickers, lookback_days: int = 63):
     rows = []
     for raw in tickers:
         t = (raw or "").strip().upper()
@@ -65,16 +63,12 @@ def fetch_scores(tickers: list[str], lookback_days: int = 63) -> pd.DataFrame:
         print(f"  fetching {t}...", flush=True)
         closes = _closes_from_yahoo(t)
         if closes is None:
-            rows.append(
-                {"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False}
-            )
+            rows.append({"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False})
             print(f"  {t}: FAIL", flush=True)
             continue
         ret, vol = _scores_from_closes(closes, lookback_days)
         ok = bool(np.isfinite(ret) and np.isfinite(vol))
-        rows.append(
-            {"ticker": t, "return_score": ret, "risk_score": vol, "name": t, "ok": ok}
-        )
+        rows.append({"ticker": t, "return_score": ret, "risk_score": vol, "name": t, "ok": ok})
         print(f"  {t}: ok ret={ret:.4f} vol={vol:.4f}", flush=True)
     return pd.DataFrame(rows)
 

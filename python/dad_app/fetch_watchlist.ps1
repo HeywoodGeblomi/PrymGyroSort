@@ -1,6 +1,6 @@
 # Windows-native Yahoo chart fetch — no Python yfinance
 $ErrorActionPreference = "Continue"
-$tickers = @("SNDK","LITE","CAT","GEV","MU","RKLB","TSLA","NVDA","ETN","ZS","BE","DELL","MRVL")
+$tickers = @("CRAK","LITE","CAT","GEV","MU","RKLB","TSLA","NVDA","ETN","ZS","BE","DELL","MRVL")
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $out = Join-Path $repoRoot "data\dad_watchlist_live.csv"
 $rows = New-Object System.Collections.Generic.List[string]
