@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Fetch return + risk proxies via yfinance. No .info(); hard timeouts. Not advice."""
+"""Fetch return + risk via Yahoo chart HTTP API (no yfinance/curl_cffi). Not advice."""
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -14,56 +16,66 @@ DEFAULT_TICKERS = [
     "SNDK", "LITE", "CAT", "GEV", "MU", "RKLB", "TSLA",
     "NVDA", "ETN", "ZS", "BE", "DELL", "MRVL",
 ]
-TICKER_TIMEOUT_SEC = 15
+HTTP_TIMEOUT = 10
 
 
-def _one_ticker(t: str, lookback_days: int) -> dict:
-    import yfinance as yf
-
-    t = t.strip().upper()
-    empty = {"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False}
+def _closes_from_yahoo(ticker: str) -> np.ndarray | None:
+    """Daily adjusted closes via chart API. Hard socket timeout."""
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+        f"?range=6mo&interval=1d&events=div%2Csplits"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; PrymGyroSort/0.1; +research)",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
     try:
-        hist = yf.Ticker(t).history(period="6mo", auto_adjust=True, actions=False)
-        if hist is None or hist.empty or "Close" not in hist.columns:
-            return empty
-        close = hist["Close"].dropna()
-        if len(close) < 10:
-            return empty
-        window = close.iloc[-min(lookback_days, len(close)) :]
-        ret = float(window.iloc[-1] / window.iloc[0] - 1.0)
-        daily = window.pct_change().dropna()
-        vol = float(daily.std() * np.sqrt(252)) if len(daily) > 2 else np.nan
-        ok = bool(np.isfinite(ret) and np.isfinite(vol))
-        return {"ticker": t, "return_score": ret, "risk_score": vol, "name": t, "ok": ok}
-    except Exception:
-        return empty
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, ValueError):
+        return None
+    try:
+        result = payload["chart"]["result"][0]
+        quote = result["indicators"]["quote"][0]
+        closes = quote.get("close") or []
+        arr = np.array([c for c in closes if c is not None], dtype=np.float64)
+        return arr if arr.size >= 10 else None
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def _scores_from_closes(closes: np.ndarray, lookback_days: int) -> tuple[float, float]:
+    window = closes[-min(lookback_days, len(closes)) :]
+    ret = float(window[-1] / window[0] - 1.0)
+    daily = np.diff(window) / window[:-1]
+    vol = float(np.std(daily) * np.sqrt(252)) if daily.size > 2 else float("nan")
+    return ret, vol
 
 
 def fetch_scores(tickers: list[str], lookback_days: int = 63) -> pd.DataFrame:
-    try:
-        import yfinance  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError("Install yfinance: py -m pip install yfinance") from e
-
     rows = []
-    with ThreadPoolExecutor(max_workers=1) as ex:
-        for t in tickers:
-            t = (t or "").strip()
-            if not t:
-                continue
-            fut = ex.submit(_one_ticker, t, lookback_days)
-            try:
-                rows.append(fut.result(timeout=TICKER_TIMEOUT_SEC))
-            except (FuturesTimeout, Exception):
-                rows.append(
-                    {
-                        "ticker": t.upper(),
-                        "return_score": np.nan,
-                        "risk_score": np.nan,
-                        "name": t.upper(),
-                        "ok": False,
-                    }
-                )
+    for raw in tickers:
+        t = (raw or "").strip().upper()
+        if not t:
+            continue
+        print(f"  fetching {t}...", flush=True)
+        closes = _closes_from_yahoo(t)
+        if closes is None:
+            rows.append(
+                {"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False}
+            )
+            print(f"  {t}: FAIL", flush=True)
+            continue
+        ret, vol = _scores_from_closes(closes, lookback_days)
+        ok = bool(np.isfinite(ret) and np.isfinite(vol))
+        rows.append(
+            {"ticker": t, "return_score": ret, "risk_score": vol, "name": t, "ok": ok}
+        )
+        print(f"  {t}: ok ret={ret:.4f} vol={vol:.4f}", flush=True)
     return pd.DataFrame(rows)
 
 
@@ -74,13 +86,15 @@ def main() -> int:
     ap.add_argument("--out", default=str(ROOT / "data" / "dad_watchlist_live.csv"))
     args = ap.parse_args()
     tickers = [x.strip() for x in args.tickers.split(",") if x.strip()]
+    print(f"[fetch] {len(tickers)} tickers, timeout={HTTP_TIMEOUT}s each", flush=True)
     df = fetch_scores(tickers, lookback_days=args.lookback_days)
     ok = int(df["ok"].sum()) if len(df) and "ok" in df.columns else 0
     out = df[["ticker", "return_score", "risk_score", "name"]].dropna()
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.out, index=False)
-    print(f"[fetch] ok={ok}/{len(df)} -> {args.out}")
-    print(out.to_string(index=False))
+    print(f"[fetch] ok={ok}/{len(df)} -> {args.out}", flush=True)
+    if len(out):
+        print(out.to_string(index=False), flush=True)
     return 0 if ok >= 2 else 2
 
 
