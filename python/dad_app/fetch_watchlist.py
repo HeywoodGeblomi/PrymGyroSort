@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Fetch return + risk proxies via yfinance for dad watchlist. Not advice. promote_ready=false."""
+"""Fetch return + risk proxies via yfinance. No .info(); hard timeouts. Not advice."""
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from pathlib import Path
 
 import numpy as np
@@ -13,47 +14,56 @@ DEFAULT_TICKERS = [
     "SNDK", "LITE", "CAT", "GEV", "MU", "RKLB", "TSLA",
     "NVDA", "ETN", "ZS", "BE", "DELL", "MRVL",
 ]
+TICKER_TIMEOUT_SEC = 15
+
+
+def _one_ticker(t: str, lookback_days: int) -> dict:
+    import yfinance as yf
+
+    t = t.strip().upper()
+    empty = {"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False}
+    try:
+        hist = yf.Ticker(t).history(period="6mo", auto_adjust=True, actions=False)
+        if hist is None or hist.empty or "Close" not in hist.columns:
+            return empty
+        close = hist["Close"].dropna()
+        if len(close) < 10:
+            return empty
+        window = close.iloc[-min(lookback_days, len(close)) :]
+        ret = float(window.iloc[-1] / window.iloc[0] - 1.0)
+        daily = window.pct_change().dropna()
+        vol = float(daily.std() * np.sqrt(252)) if len(daily) > 2 else np.nan
+        ok = bool(np.isfinite(ret) and np.isfinite(vol))
+        return {"ticker": t, "return_score": ret, "risk_score": vol, "name": t, "ok": ok}
+    except Exception:
+        return empty
 
 
 def fetch_scores(tickers: list[str], lookback_days: int = 63) -> pd.DataFrame:
     try:
-        import yfinance as yf
+        import yfinance  # noqa: F401
     except ImportError as e:
-        raise SystemExit("Install yfinance: py -m pip install yfinance") from e
+        raise RuntimeError("Install yfinance: py -m pip install yfinance") from e
 
     rows = []
-    for t in tickers:
-        t = t.strip().upper()
-        if not t:
-            continue
-        try:
-            hist = yf.Ticker(t).history(period="6mo")
-            if hist is None or hist.empty or "Close" not in hist.columns:
-                rows.append({"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False})
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        for t in tickers:
+            t = (t or "").strip()
+            if not t:
                 continue
-            close = hist["Close"].dropna()
-            if len(close) < 10:
-                rows.append({"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False})
-                continue
-            window = close.iloc[-min(lookback_days, len(close)) :]
-            ret = float(window.iloc[-1] / window.iloc[0] - 1.0)
-            daily = window.pct_change().dropna()
-            vol = float(daily.std() * np.sqrt(252)) if len(daily) > 2 else np.nan
-            info_name = t
+            fut = ex.submit(_one_ticker, t, lookback_days)
             try:
-                info = yf.Ticker(t).info or {}
-                info_name = info.get("shortName") or info.get("longName") or t
-            except Exception:
-                pass
-            rows.append({
-                "ticker": t,
-                "return_score": ret,
-                "risk_score": vol,
-                "name": info_name,
-                "ok": bool(np.isfinite(ret) and np.isfinite(vol)),
-            })
-        except Exception:
-            rows.append({"ticker": t, "return_score": np.nan, "risk_score": np.nan, "name": t, "ok": False})
+                rows.append(fut.result(timeout=TICKER_TIMEOUT_SEC))
+            except (FuturesTimeout, Exception):
+                rows.append(
+                    {
+                        "ticker": t.upper(),
+                        "return_score": np.nan,
+                        "risk_score": np.nan,
+                        "name": t.upper(),
+                        "ok": False,
+                    }
+                )
     return pd.DataFrame(rows)
 
 
@@ -65,11 +75,11 @@ def main() -> int:
     args = ap.parse_args()
     tickers = [x.strip() for x in args.tickers.split(",") if x.strip()]
     df = fetch_scores(tickers, lookback_days=args.lookback_days)
-    ok = int(df["ok"].sum()) if "ok" in df.columns else 0
+    ok = int(df["ok"].sum()) if len(df) and "ok" in df.columns else 0
     out = df[["ticker", "return_score", "risk_score", "name"]].dropna()
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.out, index=False)
-    print(f"[fetch] ok={ok}/{len(df)} → {args.out}")
+    print(f"[fetch] ok={ok}/{len(df)} -> {args.out}")
     print(out.to_string(index=False))
     return 0 if ok >= 2 else 2
 
