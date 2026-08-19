@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dad Dashboard Phase 2 — watchlist, live fetch, emailable report. Not advice. promote_ready=false."""
+"""Dad Dashboard — live CSV + Yahoo HTTP refresh + report. Not advice. promote_ready=false."""
 from __future__ import annotations
 
 from datetime import date
@@ -13,10 +13,14 @@ try:
     from fetch_watchlist import fetch_scores, DEFAULT_TICKERS
 except Exception:
     fetch_scores = None
-    DEFAULT_TICKERS = []
+    DEFAULT_TICKERS = [
+        "SNDK", "LITE", "CAT", "GEV", "MU", "RKLB", "TSLA",
+        "NVDA", "ETN", "ZS", "BE", "DELL", "MRVL",
+    ]
 
 ROOT = Path(__file__).resolve().parents[2]
 WATCHLIST = ROOT / "data" / "dad_watchlist.csv"
+LIVE = ROOT / "data" / "dad_watchlist_live.csv"
 TEMPLATE = ROOT / "data" / "dad_template.csv"
 
 
@@ -44,26 +48,19 @@ th {{ background: #eee; }}
 </style></head><body>
 <h1>{title}</h1>
 <p>Date: {date.today().isoformat()}</p>
-<p><strong>Not investment advice.</strong> Structural ranking only. You decide any trades in your brokerage.</p>
+<p><strong>Not investment advice.</strong> Structural ranking only.</p>
 <h2>Top 5 to review</h2>
 <table><thead><tr>{head}</tr></thead><tbody>{top_rows}</tbody></table>
 <h2>Full ranking</h2>
 <table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>
-<p class="note">Lower rank is better (1 = non-dominated). promote_ready=false</p>
+<p class="note">Lower rank is better. promote_ready=false</p>
 </body></html>"""
 
 
 def main():
     st.set_page_config(page_title="Dad Ranking Report", layout="centered")
-    st.markdown(
-        """<style>html, body, [class*=\"css\"]  {{ font-size: 1.15rem; }}</style>""",
-        unsafe_allow_html=True,
-    )
     st.title("Dad Ranking Report")
-    st.caption(
-        "Structural ranking only — not investment advice. "
-        "Manual review for personal use. promote_ready=false"
-    )
+    st.caption("Structural ranking only — not investment advice. promote_ready=false")
 
     st.subheader("1. Load data")
     source = st.radio(
@@ -74,32 +71,43 @@ def main():
     )
 
     if source == "Dad watchlist (default)":
-        if WATCHLIST.is_file():
-            st.info(
-                "Use **Refresh live data** for Yahoo scores, or load CSV placeholders. "
-                "Not investment advice."
-            )
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("Load dad watchlist", type="secondary"):
+        st.info(
+            "**Load scored live CSV** uses the last Yahoo snapshot in the repo. "
+            "**Refresh live data** re-fetches via Yahoo chart HTTP (not yfinance)."
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Load scored live CSV", type="primary"):
+                path = LIVE if LIVE.is_file() else WATCHLIST
+                if path.is_file():
+                    st.session_state["df"] = load_csv(path)
+                    st.success(f"Loaded {path.name}")
+                else:
+                    st.error("No live/watchlist CSV found")
+        with c2:
+            if st.button("Load placeholders"):
+                if WATCHLIST.is_file():
                     st.session_state["df"] = load_csv(WATCHLIST)
-            with c2:
-                if st.button("Refresh live data (yfinance)", type="secondary"):
-                    if fetch_scores is None:
-                        st.error("Install yfinance: py -m pip install yfinance")
+                else:
+                    st.error("dad_watchlist.csv missing")
+        with c3:
+            if st.button("Refresh live data"):
+                if fetch_scores is None:
+                    st.error("fetch_watchlist module missing")
+                else:
+                    with st.spinner("Yahoo chart HTTP (timeout 10s/ticker)..."):
+                        live = fetch_scores(list(DEFAULT_TICKERS))
+                    live = live.dropna(subset=["return_score", "risk_score"])
+                    if len(live) < 2:
+                        st.error(
+                            "Live fetch got too few rows. "
+                            "Use **Load scored live CSV** or run fetch_watchlist.ps1 on Windows."
+                        )
                     else:
-                        with st.spinner("Fetching Yahoo Finance data..."):
-                            live = fetch_scores(list(DEFAULT_TICKERS))
-                        live = live.dropna(subset=["return_score", "risk_score"])
-                        if len(live) < 2:
-                            st.error("Live fetch returned too few rows — try again later")
-                        else:
-                            st.session_state["df"] = live[["ticker", "return_score", "risk_score", "name"]]
-                            st.success(f"Loaded {len(live)} tickers from live data")
-            if "df" in st.session_state:
-                st.dataframe(st.session_state["df"], use_container_width=True, hide_index=True)
-        else:
-            st.error("dad_watchlist.csv not found")
+                        st.session_state["df"] = live[["ticker", "return_score", "risk_score", "name"]]
+                        st.success(f"Fetched {len(live)} tickers")
+        if "df" in st.session_state:
+            st.dataframe(st.session_state["df"], use_container_width=True, hide_index=True)
     else:
         uploaded = st.file_uploader("Choose CSV file", type=["csv"])
         if TEMPLATE.is_file():
@@ -121,7 +129,7 @@ def main():
     if st.button("Run Report", type="primary", use_container_width=True):
         df = st.session_state.get("df")
         if df is None:
-            st.error("Load the watchlist or upload a CSV first.")
+            st.error("Load data first.")
         else:
             try:
                 st.session_state["out"] = rank_dataframe(df)
@@ -135,12 +143,11 @@ def main():
         bottom = out.nlargest(5, "rank")
         st.subheader("Top 5 to review")
         st.dataframe(top[show], use_container_width=True, hide_index=True)
-        st.subheader("Bottom 5 (higher rank = more dominated)")
+        st.subheader("Bottom 5")
         st.dataframe(bottom[show], use_container_width=True, hide_index=True)
         st.subheader("Full ranking")
         st.dataframe(out[show], use_container_width=True, hide_index=True)
         st.info("Lower rank is better. Not a buy/sell recommendation.")
-
         st.subheader("3. Download for email")
         st.download_button(
             "Download report CSV",
@@ -149,7 +156,7 @@ def main():
             mime="text/csv",
         )
         st.download_button(
-            "Download report HTML (open → Print → Save as PDF)",
+            "Download report HTML",
             data=report_html(out, "Dad Ranking Report").encode("utf-8"),
             file_name=f"dad_report_{date.today().isoformat()}.html",
             mime="text/html",
