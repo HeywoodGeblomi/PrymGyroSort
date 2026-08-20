@@ -1,6 +1,7 @@
 /**
- * PrymGyroSort zero-copy binding (hardened)
+ * PrymGyroSort zero-copy binding — GyroRank v0.2
  * Requires C-contiguous float64 matrix with shape (N, 2). No silent copy.
+ * Strategy names match GyroRank v0.2 (Fenwick-only exact M=2; LowAux deleted).
  */
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -52,6 +53,8 @@ void rank_numpy(py::array matrix, py::array ranks, bool memory_pressure) {
     if (mbuf.ptr == nullptr || rbuf.ptr == nullptr)
         throw std::invalid_argument("null buffer");
 
+    // memory_pressure accepted for API compatibility; on v0.2 it does not select
+    // a different algorithm (Fenwick-only for exact M=2).
     gyro::execute_gyro_rank(static_cast<const double*>(mbuf.ptr), n, m,
                             static_cast<int32_t*>(rbuf.ptr), nullptr, memory_pressure);
 }
@@ -62,18 +65,29 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
     const auto n = static_cast<uint32_t>(mbuf.shape[0]);
     const auto m = static_cast<uint32_t>(mbuf.shape[1]);
     rank_numpy(matrix, ranks, memory_pressure);
+
+    gyro::GyroOptions opt;
+    opt.exact = true;
+    opt.memory_pressure = memory_pressure;
+    opt.allow_approx_1d = false;
+
     gyro::GyroController ctrl;
-    ctrl.observe(static_cast<const double*>(mbuf.ptr), n, m, memory_pressure);
-    const auto strat = ctrl.gate();
-    const char* strat_name = "Unknown";
+    ctrl.observe(static_cast<const double*>(mbuf.ptr), n, m, memory_pressure, 0);
+    ctrl.striate(opt);
+    const auto strat = ctrl.gate(opt);
+
+    const char* strat_name = "Fenwick2D";
     switch (strat) {
-    case gyro::Strategy::Insertion1D: strat_name = "Insertion1D"; break;
-    case gyro::Strategy::Fenwick2D:   strat_name = "Fenwick2D"; break;
-    case gyro::Strategy::LowAux2D:    strat_name = "LowAux2D"; break;
+    case gyro::Strategy::Rank1D: strat_name = "Rank1D"; break;
+    case gyro::Strategy::Fenwick2D: strat_name = "Fenwick2D"; break;
     case gyro::Strategy::NestedOrProjection: strat_name = "NestedOrProjection"; break;
+    case gyro::Strategy::Approx1D: strat_name = "Approx1D"; break;
+    default: break;
     }
+
     py::dict out;
-    out["n"] = n; out["m"] = m;
+    out["n"] = n;
+    out["m"] = m;
     out["memory_pressure"] = memory_pressure;
     out["strategy"] = strat_name;
     out["zerocopy"] = true;
@@ -86,7 +100,7 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
 }  // namespace
 
 PYBIND11_MODULE(prym_gyro_native, m) {
-    m.doc() = "PrymGyroSort zero-copy binding. Requires C-contiguous (N,2) float64.";
+    m.doc() = "PrymGyroSort zero-copy binding (GyroRank v0.2). Requires C-contiguous (N,2) float64.";
     m.def("rank", &rank_numpy, py::arg("matrix"), py::arg("ranks"),
           py::arg("memory_pressure") = false);
     m.def("rank_report", &rank_numpy_report, py::arg("matrix"), py::arg("ranks"),

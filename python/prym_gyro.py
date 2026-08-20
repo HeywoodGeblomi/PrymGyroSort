@@ -1,5 +1,5 @@
 """
-PrymGyroSort — Phase 1 zero-copy helper
+PrymGyroSort — zero-copy helper (GyroRank v0.2)
 
 Usage:
   import numpy as np
@@ -7,6 +7,9 @@ Usage:
 
   X = np.ascontiguousarray(objs, dtype=np.float64)  # (N, 2)
   ranks = rank(X)  # int32[N]
+
+memory_pressure defaults to False. On GyroRank v0.2 it is a no-op for
+algorithm selection (Fenwick-only for exact M=2). Kept for API compatibility.
 """
 from __future__ import annotations
 
@@ -28,24 +31,22 @@ except ImportError as e:  # pragma: no cover
     ) from e
 
 
-def rank(matrix: np.ndarray, memory_pressure: bool | None = None) -> np.ndarray:
+def rank(matrix: np.ndarray, memory_pressure: bool = False) -> np.ndarray:
+    """Rank an (N, 2) float64 matrix. memory_pressure is currently a no-op on v0.2."""
     X = np.ascontiguousarray(matrix, dtype=np.float64)
     if X.ndim != 2:
         raise ValueError("matrix must be 2-D")
     n = X.shape[0]
     ranks = np.empty(n, dtype=np.int32)
-    if memory_pressure is None:
-        memory_pressure = n >= 65536
     _native.rank(X, ranks, bool(memory_pressure))
     return ranks
 
 
-def rank_report(matrix: np.ndarray, memory_pressure: bool | None = None) -> dict:
+def rank_report(matrix: np.ndarray, memory_pressure: bool = False) -> dict:
+    """Rank and return strategy metadata. memory_pressure is currently a no-op on v0.2."""
     X = np.ascontiguousarray(matrix, dtype=np.float64)
     n = X.shape[0]
     ranks = np.empty(n, dtype=np.int32)
-    if memory_pressure is None:
-        memory_pressure = n >= 65536
     info = dict(_native.rank_report(X, ranks, bool(memory_pressure)))
     info["ranks"] = ranks
     return info
