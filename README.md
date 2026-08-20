@@ -9,14 +9,14 @@
 
 | Layer | Source |
 |-------|--------|
-| Ranking kernel | [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) — GyroController + FenwickMax / LowAux2D |
-| Geometric wire | [prym-eigenform-pipeline-d12](https://github.com/HeywoodGeblomi/prym-eigenform-pipeline-d12) path-local dual-Rauzy streams |
+| Ranking kernel | [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) — FenwickMax (exact 2-D layers) |
+| Geometric wire | [prym-eigenform-pipeline-d12](https://github.com/HeywoodGeblomi/prym-eigenform-pipeline-d12) path-local dual-Rauzy streams (prefilter only; off by default) |
 | Domain adapters | Finance profiles · synthetic / certified geometric ensemble |
 
 ## What it does
 
 1. Accepts an **N × 2** objective matrix (`matrix.bin` or synthetic), lower = better.
-2. Optional **static OR-quantile** prefilter, then ranks by **weak dominance**.
+2. Optional static OR-quantile prefilter (off by default for the pair-sieve product), then ranks by **weak dominance** via GyroRank.
 3. Isolates rank-1 / top-fraction candidates.
 
 The C++ core is domain-agnostic. Python sidecars map geometry or market features into the frozen binary contract.
@@ -77,7 +77,7 @@ python3 python/protocol_finance.py --profile pairs --n 4096 --out-dir work
 python3 python/prym_sieve_cli.py --matrix work/matrix.bin --n 4096 --json
 ```
 
-## Measured scaling (LowAux2D, `memory_pressure=1`)
+## Measured scaling (FenwickMax exact 2-D layers)
 
 | N | Wall time | Top-frac recall | Separation gap |
 |---:|---:|---:|---:|
@@ -86,7 +86,7 @@ python3 python/prym_sieve_cli.py --matrix work/matrix.bin --n 4096 --json
 | 1,048,576 | ~1188 ms | 1.000 | +898.8 |
 
 Full table: [docs/SCALING_RESULTS.md](docs/SCALING_RESULTS.md).  
-Asymptotic o(N) auxiliary ranking is **not claimed**.
+Asymptotic o(N) auxiliary ranking is **not claimed**. `memory_pressure` is currently a no-op on GyroRank v0.2 (Fenwick-only).
 
 ## Layout
 
@@ -94,11 +94,11 @@ Asymptotic o(N) auxiliary ranking is **not claimed**.
 PrymGyroSort/
 ├── README.md  NON_CLAIMS.md  LICENSE  RELEASE_NOTES.md
 ├── Dockerfile  docker-compose.yml
-├── cpp/include/gyro_rank.hpp   # frozen M=2 kernel
+├── cpp/include/gyro_rank.hpp   # vendored GyroRank v0.2 (Fenwick exact 2-D)
 ├── python/
 │   ├── prym_sieve_cli.py       # production entry (hardened)
 │   ├── protocol_finance.py     # multi-profile finance adapter
-│   ├── prefilter_rank.py       # static OR-quantile
+│   ├── prefilter_rank.py       # static OR-quantile (optional)
 │   ├── bindings/               # zero-copy native .so
 │   └── sieve_durability.py     # long-horizon tracker
 └── docs/
@@ -107,7 +107,7 @@ PrymGyroSort/
 ## Credits
 
 Geometric scaffold: Heywood Geblomi / prym-eigenform-pipeline-d12  
-Ranking kernel: GyroRank (TDPSK lineage)  
+Ranking kernel: GyroRank (TDPSK lineage) — FenwickMax exact 2-D layers  
 Integration: THE BEASTIE BOYZ
 
 ## License
