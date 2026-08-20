@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-GYR-SIEVE-001 Track 1 — Pair sieve CLI
+GYR-SIEVE-001 Track 1 + Track 2 — Pair sieve CLI with optional χ
 
 Two numeric objectives. Calls GyroRank (no Python Fenwick reimplementation).
 Emits required report keys including identity_ok / identity_sha256 vs Fenwick.
-Default: no geometric prefilter. promote_ready=false.
+Default: no geometric prefilter, χ off. promote_ready=false.
+
+--chi: after ranks, extract F = {i | rank[i] <= k}, run χ pick, assert ranks unchanged.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.1.0-pair-sieve"
+VERSION = "0.2.0-pair-sieve-chi"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
@@ -27,6 +29,8 @@ try:
 except Exception as e:
     print(json.dumps({"error": "native_binding_unavailable", "detail": str(e)}), file=sys.stderr)
     raise SystemExit(3)
+
+from chi_pick import chi_pick  # Track 2
 
 
 def die(code: int, msg: str, *, as_json: bool = False) -> None:
@@ -69,7 +73,7 @@ def ranks_sha256(ranks: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(ranks, dtype=np.int32).tobytes()).hexdigest()
 
 
-def run_pair_sieve(X: np.ndarray, k: int = 1, *, as_json: bool = False) -> dict:
+def run_pair_sieve(X: np.ndarray, k: int = 1, *, chi: bool = False, chi_seed: int = 0, as_json: bool = False) -> dict:
     X = validate_matrix(X, as_json=as_json)
     n = int(X.shape[0])
     if k < 1:
@@ -80,6 +84,9 @@ def run_pair_sieve(X: np.ndarray, k: int = 1, *, as_json: bool = False) -> dict:
     ranks = rank(X, memory_pressure=False)
     wall_ms = (time.perf_counter() - t0) * 1e3
 
+    # Snapshot ranks before any χ path (S5)
+    ranks_before = ranks.copy()
+
     # Identity: second call must be bit-identical (Fenwick-only on v0.2)
     ranks_ref = rank(X, memory_pressure=False)
     identity_ok = bool(np.array_equal(ranks, ranks_ref))
@@ -87,8 +94,9 @@ def run_pair_sieve(X: np.ndarray, k: int = 1, *, as_json: bool = False) -> dict:
 
     front_size = int(np.sum(ranks == 1))
     front_k = int(np.sum(ranks <= k))
+    F = np.flatnonzero(ranks <= k).tolist()
 
-    return {
+    report = {
         "ok": True,
         "version": VERSION,
         "n": n,
@@ -102,6 +110,27 @@ def run_pair_sieve(X: np.ndarray, k: int = 1, *, as_json: bool = False) -> dict:
         "promote_ready": False,
     }
 
+    if chi:
+        try:
+            chi_result = chi_pick(F, seed=chi_seed)
+            pick = chi_result["pick"]
+            # S6: pick ∈ F
+            if pick not in F:
+                die(4, f"chi pick {pick} not in F", as_json=as_json)
+            # S5: ranks must be unchanged
+            if not np.array_equal(ranks, ranks_before):
+                die(4, "chi path mutated ranks (S5 fail)", as_json=as_json)
+            report["chi_on"] = True
+            report["chi_pick"] = int(pick)
+            report["chi_token"] = chi_result["chi_token"]
+            report["chi_seed"] = int(chi_seed)
+        except ValueError as e:
+            # |F|==0 fail-closed
+            die(2, str(e), as_json=as_json)
+    # without --chi, no extra keys (JSON identical to Track 1 shape for core keys)
+
+    return report
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=f"GYR-SIEVE-001 pair sieve {VERSION}")
@@ -111,6 +140,8 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=100_000, help="row count (default 1e5 for S1)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--k", type=int, default=1, help="max rank kept (default 1 = front)")
+    ap.add_argument("--chi", action="store_true", help="Track 2: run χ pick on front F (off by default)")
+    ap.add_argument("--chi-seed", type=int, default=0, help="documented seed/tape for χ pick")
     ap.add_argument("--out", default=None, help="optional output directory")
     args = ap.parse_args()
     as_json = bool(args.json)
@@ -130,18 +161,21 @@ def main() -> int:
             X = synthetic(args.n, args.seed)
             source = f"synthetic_seed={args.seed}"
 
-        report = run_pair_sieve(X, k=args.k, as_json=as_json)
+        report = run_pair_sieve(X, k=args.k, chi=args.chi, chi_seed=args.chi_seed, as_json=as_json)
         report["source"] = source
 
         if as_json:
             print(json.dumps(report))
         else:
-            print(
+            line = (
                 f"[pair_sieve] n={report['n']} wall_ms={report['wall_ms']:.3f} "
                 f"front_size={report['front_size']} k={report['k']} "
                 f"identity_ok={report['identity_ok']} strategy={report['strategy']} "
                 f"promote_ready=false"
             )
+            if report.get("chi_on"):
+                line += f" chi_pick={report['chi_pick']} chi_token={report['chi_token']}"
+            print(line)
             if not report["identity_ok"]:
                 print("[pair_sieve] FAIL identity_ok=false", file=sys.stderr)
                 return 4
