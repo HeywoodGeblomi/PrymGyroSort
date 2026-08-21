@@ -38,11 +38,12 @@ COPY --from=builder /build/python/bindings/prym_gyro_native.so /app/python/bindi
 COPY --from=builder /build/rank_driver /usr/local/bin/rank_driver
 COPY python/ /app/python/
 COPY NON_CLAIMS.md README.md LICENSE /app/
+COPY examples/ /app/examples/
 RUN mkdir -p /app/work /app/docs /app/python/bindings \
     && chown -R quantoperator:quantgroup /app \
     && chmod +x /usr/local/bin/rank_driver
 ENV PYTHONPATH=/app/python:/app/python/bindings
 USER quantoperator
 WORKDIR /app/work
-ENTRYPOINT ["python3", "/app/python/prym_sieve_cli.py"]
-CMD ["--n", "4096", "--seed", "42"]
+ENTRYPOINT ["python3", "/app/python/pair_sieve_cli.py"]
+CMD ["--prove", "--json"]

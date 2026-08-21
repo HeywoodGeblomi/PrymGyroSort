@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.5.0-pair-sieve-product"
+VERSION = "0.5.1-pair-sieve-prove"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
@@ -208,6 +208,11 @@ def main():
     ap.add_argument("--chi", action="store_true")
     ap.add_argument("--chi-seed", type=int, default=0)
     ap.add_argument("--falsifier", action="store_true")
+    ap.add_argument(
+        "--prove",
+        action="store_true",
+        help="P3: S1 identity (N=1e5) + both falsifiers; exit 0 iff prove_ok",
+    )
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     as_json = bool(args.json)
@@ -220,6 +225,38 @@ def main():
         result = run_falsifier(q=float(args.q), name=fname)
         print(json.dumps(result, indent=2) if as_json else result)
         return 0 if result["falsifier_ok"] else 9
+
+    if args.prove:
+        results = {}
+        fq = run_falsifier(q=float(args.q), name="or_quantile")
+        results["or_quantile"] = bool(fq.get("falsifier_ok"))
+        fp = run_falsifier(q=float(args.q), name="prym")
+        results["prym"] = bool(fp.get("falsifier_ok"))
+        try:
+            X = synthetic(100_000, 42)
+            report, ranks, _ = run_pair_sieve(X, k=1, as_json=as_json)
+            results["identity_n1e5"] = bool(report.get("identity_ok"))
+            results["n"] = int(report.get("n", 0))
+            results["wall_ms"] = report.get("wall_ms")
+            results["identity_sha256"] = report.get("identity_sha256")
+        except SystemExit:
+            results["identity_n1e5"] = False
+        prove_ok = all(
+            [
+                results.get("or_quantile"),
+                results.get("prym"),
+                results.get("identity_n1e5"),
+            ]
+        )
+        out = {
+            "ok": prove_ok,
+            "prove_ok": prove_ok,
+            "version": VERSION,
+            "promote_ready": False,
+            "checks": results,
+        }
+        print(json.dumps(out, indent=2) if as_json else out)
+        return 0 if prove_ok else 9
 
     try:
         csv_rows = csv_fields = None
