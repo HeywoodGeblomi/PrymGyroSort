@@ -37,4 +37,4 @@ jobs:
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
           python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --json | tee /tmp/book.json
-          python3 -c "import json; r=json.load(open('/tmp/book.json')); assert r.get('identity_ok') is True, r; assert r.get('identity_mode') in ('fenwick_oracle','fenwick_repeat'), r; print(r['identity_mode'], 'ok')"
+          python3 -c "import json; r=json.load(open('/tmp/book.json')); assert r.get('identity_ok') is True, r; assert r.get('identity_mode') == 'fenwick_oracle', r; print(r['identity_mode'], 'ok')"
