@@ -1,7 +1,7 @@
 /**
  * PrymGyroSort zero-copy binding — GyroRank v0.2
  * Requires C-contiguous float64 matrix with shape (N, 2). No silent copy.
- * Strategy names match GyroRank v0.2 (Fenwick-only exact M=2; LowAux deleted).
+ * GYR-FIX-001 F3: rank_fenwick_ref exports exact_rank_2d_fenwick for identity oracle.
  */
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -53,8 +53,6 @@ void rank_numpy(py::array matrix, py::array ranks, bool memory_pressure) {
     if (mbuf.ptr == nullptr || rbuf.ptr == nullptr)
         throw std::invalid_argument("null buffer");
 
-    // memory_pressure accepted for API compatibility; on v0.2 it does not select
-    // a different algorithm (Fenwick-only for exact M=2).
     gyro::execute_gyro_rank(static_cast<const double*>(mbuf.ptr), n, m,
                             static_cast<int32_t*>(rbuf.ptr), nullptr, memory_pressure);
 }
@@ -97,6 +95,23 @@ py::dict rank_numpy_report(py::array matrix, py::array ranks, bool memory_pressu
     return out;
 }
 
+void rank_fenwick_ref(py::array matrix, py::array ranks) {
+    if (!py::isinstance<py::array_t<double>>(matrix))
+        throw std::invalid_argument("matrix must be dtype float64");
+    if (!py::isinstance<py::array_t<int32_t>>(ranks))
+        throw std::invalid_argument("ranks must be dtype int32");
+    auto mbuf = matrix.request();
+    auto rbuf = ranks.request();
+    require_c_contiguous_matrix(mbuf);
+    const auto n = static_cast<uint32_t>(mbuf.shape[0]);
+    const auto m = static_cast<uint32_t>(mbuf.shape[1]);
+    if (rbuf.ndim != 1 || static_cast<uint32_t>(rbuf.shape[0]) != n)
+        throw std::invalid_argument("ranks must be 1-D int32 of length N");
+    if (n == 0) return;
+    gyro::exact_rank_2d_fenwick(static_cast<const double*>(mbuf.ptr), n, m,
+                                static_cast<int32_t*>(rbuf.ptr), nullptr);
+}
+
 }  // namespace
 
 PYBIND11_MODULE(prym_gyro_native, m) {
@@ -105,4 +120,6 @@ PYBIND11_MODULE(prym_gyro_native, m) {
           py::arg("memory_pressure") = false);
     m.def("rank_report", &rank_numpy_report, py::arg("matrix"), py::arg("ranks"),
           py::arg("memory_pressure") = false);
+    m.def("rank_fenwick_ref", &rank_fenwick_ref, py::arg("matrix"), py::arg("ranks"),
+          "F3: exact_rank_2d_fenwick only — identity oracle");
 }
