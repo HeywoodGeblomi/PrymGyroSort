@@ -1,115 +1,46 @@
-# PrymGyroSort v0.1.5-sieve
+# PrymGyroSort — Pair Sieve Product
 
-**Multi-objective ranking filter** — weak-dominance isolation of high-value candidates under competing objectives.
+**Certified 2-objective isolation: the non-dominated deals from a CSV, with a Fenwick identity hash, in milliseconds at 1e5–1e6 rows.**
 
-[![Release](https://img.shields.io/github/v/release/HeywoodGeblomi/PrymGyroSort)](https://github.com/HeywoodGeblomi/PrymGyroSort/releases/tag/v0.1.5-sieve)
+`promote_ready=false`. Exact ranking is Fenwick-only (GyroRank v0.2). No Scan2D. No LowAux2D.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Container](https://img.shields.io/badge/container-docker-2496ED?logo=docker&logoColor=white)](#containerized)
 [![Honesty](https://img.shields.io/badge/honesty-NON__CLAIMS-important)](NON_CLAIMS.md)
 
-| Layer | Source |
-|-------|--------|
-| Ranking kernel | [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) — FenwickMax (exact 2-D layers) |
-| Geometric wire | [prym-eigenform-pipeline-d12](https://github.com/HeywoodGeblomi/prym-eigenform-pipeline-d12) path-local dual-Rauzy streams (prefilter only; off by default) |
-| Domain adapters | Finance profiles · synthetic / certified geometric ensemble |
-
-## What it does
-
-1. Accepts an **N × 2** objective matrix (`matrix.bin` or synthetic), lower = better.
-2. Optional static OR-quantile prefilter (off by default for the pair-sieve product), then ranks by **weak dominance** via GyroRank.
-3. Isolates rank-1 / top-fraction candidates.
-
-The C++ core is domain-agnostic. Python sidecars map geometry or market features into the frozen binary contract.
-
-## Honesty (mandatory)
-
-Read **[NON_CLAIMS.md](NON_CLAIMS.md)** before citing or promoting.
-
-- Execution sieve only — structural ranking, not a predictive model.
-- Does **not** claim global Lyapunov exponents or ownership of 8/5.
-- Does **not** generate trading alpha or guarantee profitable trades.
-- EXTERNAL-clean / no-χ. Not a classical 1-D comparison sort.
-- `promote_ready = false` for global spectral or live-trading claims.
-
-## Quick start (container)
+## Five-minute demo
 
 ```bash
-docker build -t prym-gyro-sieve:latest .
-
-# Self-check (exit 0 = PASS)
-docker run --rm prym-gyro-sieve:latest --self-check
-
-# Synthetic smoke
-docker run --rm prym-gyro-sieve:latest --n 4096 --seed 42 --json
-
-# Finance stress profile → rank
-mkdir -p work
-docker run --rm --entrypoint python3 -v "$PWD/work:/app/work" prym-gyro-sieve:latest \
-  /app/python/protocol_finance.py --profile stress --n 4096 --out-dir /app/work
-docker run --rm -v "$PWD/work:/app/work" prym-gyro-sieve:latest \
-  --matrix /app/work/matrix.bin --n 4096 --json
+python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --json --out /tmp/sieve
 ```
 
-## Finance profiles
+- **front.csv** — rows no other row beats on both scores
+- **report.json** — `identity_ok`, `identity_sha256`, `strategy=Fenwick2D`
+- Re-run Fenwick → same bits (`identity_mode=fenwick_repeat`)
 
-| Profile | Emphasis |
-|---------|----------|
-| `pairs` | dislocation × OBI vs liquidity/MDD (default) |
-| `liquidity` | depth / spread resilience |
-| `stress` | drawdown / gap risk |
-| `micro` | OBI×dislocation pressure vs friction |
+## Honesty
 
-Structural mapping only — **not** an order router.
+Read **[NON_CLAIMS.md](NON_CLAIMS.md)**. Product is **isolation + proof**, not prediction. No alpha, no Lyapunov ownership, no live trading.
 
-## Production hardening
-
-| Feature | Behavior |
-|---------|----------|
-| Exit codes | 0 ok · 1 usage · 2 data · 3 runtime · 4 self-check fail |
-| Guards | shape `(N,2)`, NaN/Inf, empty, size match |
-| `--self-check` / `--json` | operational probes |
-| Docker | multi-stage · non-root · HEALTHCHECK · portable ISA |
-
-## Local (no Docker)
+## Senses
 
 ```bash
-python3 python/protocol_finance.py --profile pairs --n 4096 --out-dir work
-python3 python/prym_sieve_cli.py --matrix work/matrix.bin --n 4096 --json
+python3 python/pair_sieve_cli.py --csv data.csv --x-col score --y-col cost \
+  --x-sense higher --y-sense lower --json
 ```
 
-## Measured scaling (FenwickMax exact 2-D layers)
+higher-is-better = negate that column before Fenwick.
 
-| N | Wall time | Top-frac recall | Separation gap |
-|---:|---:|---:|---:|
-| 65,536 | ~38 ms | 1.000 | +230.7 |
-| 262,144 | ~198 ms | 1.000 | +449.4 |
-| 1,048,576 | ~1188 ms | 1.000 | +898.8 |
+## Optional prefilters (off by default)
 
-Full table: [docs/SCALING_RESULTS.md](docs/SCALING_RESULTS.md).  
-Asymptotic o(N) auxiliary ranking is **not claimed**. `memory_pressure` is currently a no-op on GyroRank v0.2 (Fenwick-only).
+`--prefilter or_quantile` · `--prefilter prym`
 
-## Layout
+## Prove / pick
 
+```bash
+python3 python/pair_sieve_cli.py --prove --json
+python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --chi --json
 ```
-PrymGyroSort/
-├── README.md  NON_CLAIMS.md  LICENSE  RELEASE_NOTES.md
-├── Dockerfile  docker-compose.yml
-├── cpp/include/gyro_rank.hpp   # vendored GyroRank v0.2 (Fenwick exact 2-D)
-├── python/
-│   ├── prym_sieve_cli.py       # production entry (hardened)
-│   ├── protocol_finance.py     # multi-profile finance adapter
-│   ├── prefilter_rank.py       # static OR-quantile (optional)
-│   ├── bindings/               # zero-copy native .so
-│   └── sieve_durability.py     # long-horizon tracker
-└── docs/
-```
-
-## Credits
-
-Geometric scaffold: Heywood Geblomi / prym-eigenform-pipeline-d12  
-Ranking kernel: GyroRank (TDPSK lineage) — FenwickMax exact 2-D layers  
-Integration: THE BEASTIE BOYZ
 
 ## License
 
-MIT
+MIT. Kernel: [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) Fenwick-only.
