@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GYR-SIEVE-003 Pair Sieve Product CLI. promote_ready=false. Fenwick-only."""
+"""GYR-SIEVE-003 Pair Sieve Product CLI. promote_ready=false. Fenwick-only. GYR-FIX-001 F3."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.6.0-pair-sieve-chi"
+VERSION = "0.6.1-fix-now"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
@@ -145,7 +145,9 @@ def run_pair_sieve(X, k=1, *, prefilter=None, prefilter_q=DEFAULT_Q, chi=False, 
     t0 = time.perf_counter()
     ranks = np.ascontiguousarray(rank_fn(X, memory_pressure=False), dtype=np.int32)
     wall_ms = (time.perf_counter() - t0) * 1e3
-    ranks_ref = np.ascontiguousarray(rank_fn(X, memory_pressure=False), dtype=np.int32)
+    # F3: identity vs Fenwick oracle (not vs itself)
+    from prym_gyro import rank_fenwick_ref
+    ranks_ref = np.ascontiguousarray(rank_fenwick_ref(X), dtype=np.int32)
     identity_ok = bool(np.array_equal(ranks, ranks_ref))
     sha = ranks_sha256(ranks)
     front_size = int(np.sum(ranks == 1))
@@ -159,7 +161,7 @@ def run_pair_sieve(X, k=1, *, prefilter=None, prefilter_q=DEFAULT_Q, chi=False, 
         "k": int(k),
         "identity_sha256": sha,
         "identity_ok": identity_ok,
-        "identity_mode": "fenwick_repeat",
+        "identity_mode": "fenwick_oracle",
         "strategy": "Fenwick2D",
         "promote_ready": False,
     }
@@ -239,6 +241,7 @@ def main():
             results["n"] = int(report.get("n", 0))
             results["wall_ms"] = report.get("wall_ms")
             results["identity_sha256"] = report.get("identity_sha256")
+            results["identity_mode"] = report.get("identity_mode")
         except SystemExit:
             results["identity_n1e5"] = False
         prove_ok = all(
