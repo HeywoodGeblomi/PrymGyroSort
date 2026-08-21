@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-GYR-SIEVE-001 Track 1 + Track 2 — Pair sieve CLI with optional χ
+GYR-SIEVE-001 pair sieve CLI (Track 1 + Track 2 χ + Track 3 prefilter)
 
 Two numeric objectives. Calls GyroRank (no Python Fenwick reimplementation).
-Emits required report keys including identity_ok / identity_sha256 vs Fenwick.
-Default: no geometric prefilter, χ off. promote_ready=false.
-
---chi: after ranks, extract F = {i | rank[i] <= k}, run χ pick, assert ranks unchanged.
+--prefilter off by default (S7: off ≡ Track 1).
+--chi off by default.
+promote_ready=false.
 """
 from __future__ import annotations
 
@@ -19,24 +18,27 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.2.0-pair-sieve-chi"
+VERSION = "0.3.0-pair-sieve-prefilter"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
 
-try:
-    from prym_gyro import rank
-except Exception as e:
-    print(json.dumps({"error": "native_binding_unavailable", "detail": str(e)}), file=sys.stderr)
-    raise SystemExit(3)
-
-from chi_pick import chi_pick  # Track 2
+from prefilter import apply_prefilter, run_falsifier, PREFILTER_NAME, DEFAULT_Q  # Track 3
 
 
 def die(code: int, msg: str, *, as_json: bool = False) -> None:
     payload = {"ok": False, "error": msg, "exit_code": code, "version": VERSION, "promote_ready": False}
     print(json.dumps(payload) if as_json else f"[pair_sieve] ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def _load_rank():
+    try:
+        from prym_gyro import rank
+        return rank
+    except Exception as e:
+        print(json.dumps({"error": "native_binding_unavailable", "detail": str(e)}), file=sys.stderr)
+        raise SystemExit(3)
 
 
 def validate_matrix(X: np.ndarray, *, as_json: bool = False) -> np.ndarray:
@@ -50,7 +52,7 @@ def validate_matrix(X: np.ndarray, *, as_json: bool = False) -> np.ndarray:
         die(2, f"matrix must have M=2 columns; got M={X.shape[1]}", as_json=as_json)
     X = np.ascontiguousarray(X, dtype=np.float64)
     if not np.isfinite(X).all():
-        die(2, f"matrix contains non-finite values", as_json=as_json)
+        die(2, "matrix contains non-finite values", as_json=as_json)
     return X
 
 
@@ -73,28 +75,46 @@ def ranks_sha256(ranks: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(ranks, dtype=np.int32).tobytes()).hexdigest()
 
 
-def run_pair_sieve(X: np.ndarray, k: int = 1, *, chi: bool = False, chi_seed: int = 0, as_json: bool = False) -> dict:
-    X = validate_matrix(X, as_json=as_json)
-    n = int(X.shape[0])
+def run_pair_sieve(
+    X: np.ndarray,
+    k: int = 1,
+    *,
+    prefilter: str | None = None,
+    prefilter_q: float = DEFAULT_Q,
+    chi: bool = False,
+    chi_seed: int = 0,
+    as_json: bool = False,
+) -> dict:
+    rank_fn = _load_rank()
+    from chi_pick import chi_pick  # Track 2
+    X_full = validate_matrix(X, as_json=as_json)
+    n_full = int(X_full.shape[0])
     if k < 1:
         die(1, f"k must be >= 1; got {k}", as_json=as_json)
 
-    # Public entry (controller path → Fenwick on v0.2)
+    n_dropped = 0
+    if prefilter:
+        X, mask = apply_prefilter(X_full, name=prefilter, q=prefilter_q)
+        n_dropped = int(n_full - X.shape[0])
+        if X.shape[0] < 1:
+            die(2, "prefilter dropped all rows", as_json=as_json)
+        X = validate_matrix(X, as_json=as_json)
+    else:
+        X = X_full
+
+    n = int(X.shape[0])
+
     t0 = time.perf_counter()
-    ranks = rank(X, memory_pressure=False)
+    ranks = rank_fn(X, memory_pressure=False)
     wall_ms = (time.perf_counter() - t0) * 1e3
+    ranks = np.ascontiguousarray(ranks, dtype=np.int32)
 
-    # Snapshot ranks before any χ path (S5)
-    ranks_before = ranks.copy()
-
-    # Identity: second call must be bit-identical (Fenwick-only on v0.2)
-    ranks_ref = rank(X, memory_pressure=False)
+    ranks_ref = np.ascontiguousarray(rank_fn(X, memory_pressure=False), dtype=np.int32)
     identity_ok = bool(np.array_equal(ranks, ranks_ref))
-    identity_sha = ranks_sha256(ranks)
+    sha = ranks_sha256(ranks)
 
     front_size = int(np.sum(ranks == 1))
-    front_k = int(np.sum(ranks <= k))
-    F = np.flatnonzero(ranks <= k).tolist()
+    F = [int(i) for i in np.flatnonzero(ranks <= k)]
 
     report = {
         "ok": True,
@@ -102,32 +122,34 @@ def run_pair_sieve(X: np.ndarray, k: int = 1, *, chi: bool = False, chi_seed: in
         "n": n,
         "wall_ms": round(wall_ms, 4),
         "front_size": front_size,
-        "k": k,
-        "front_k": front_k,
-        "identity_sha256": identity_sha,
+        "k": int(k),
+        "identity_sha256": sha,
         "identity_ok": identity_ok,
         "strategy": "Fenwick2D",
         "promote_ready": False,
     }
 
+    if prefilter:
+        report["prefilter"] = prefilter
+        report["prefilter_q"] = float(prefilter_q)
+        report["n_full"] = n_full
+        report["n_dropped"] = n_dropped
+        report["n_survivors"] = n
+
     if chi:
         try:
             chi_result = chi_pick(F, seed=chi_seed)
             pick = chi_result["pick"]
-            # S6: pick ∈ F
             if pick not in F:
                 die(4, f"chi pick {pick} not in F", as_json=as_json)
-            # S5: ranks must be unchanged
-            if not np.array_equal(ranks, ranks_before):
+            if ranks_sha256(ranks) != sha:
                 die(4, "chi path mutated ranks (S5 fail)", as_json=as_json)
             report["chi_on"] = True
             report["chi_pick"] = int(pick)
             report["chi_token"] = chi_result["chi_token"]
             report["chi_seed"] = int(chi_seed)
         except ValueError as e:
-            # |F|==0 fail-closed
-            die(2, str(e), as_json=as_json)
-    # without --chi, no extra keys (JSON identical to Track 1 shape for core keys)
+            die(4, str(e), as_json=as_json)
 
     return report
 
@@ -140,8 +162,16 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=100_000, help="row count (default 1e5 for S1)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--k", type=int, default=1, help="max rank kept (default 1 = front)")
+    ap.add_argument(
+        "--prefilter",
+        default="off",
+        choices=["off", "or_quantile"],
+        help="Track 3: named prefilter (default: off). or_quantile = bottom-q on obj0 OR obj1",
+    )
+    ap.add_argument("--q", type=float, default=DEFAULT_Q, help="or_quantile fraction (default 0.25)")
     ap.add_argument("--chi", action="store_true", help="Track 2: run χ pick on front F (off by default)")
     ap.add_argument("--chi-seed", type=int, default=0, help="documented seed/tape for χ pick")
+    ap.add_argument("--falsifier", action="store_true", help="Track 3 S9: run named keep/drop falsifier and exit")
     ap.add_argument("--out", default=None, help="optional output directory")
     args = ap.parse_args()
     as_json = bool(args.json)
@@ -149,6 +179,11 @@ def main() -> int:
     if args.version:
         print(json.dumps({"version": VERSION, "promote_ready": False}) if as_json else VERSION)
         return 0
+
+    if args.falsifier:
+        result = run_falsifier(q=float(args.q))
+        print(json.dumps(result, indent=2) if as_json else result)
+        return 0 if result["falsifier_ok"] else 9
 
     if args.n < 1 or args.n > 5_000_000:
         die(1, f"n out of range: {args.n}", as_json=as_json)
@@ -161,7 +196,16 @@ def main() -> int:
             X = synthetic(args.n, args.seed)
             source = f"synthetic_seed={args.seed}"
 
-        report = run_pair_sieve(X, k=args.k, chi=args.chi, chi_seed=args.chi_seed, as_json=as_json)
+        pf = None if args.prefilter == "off" else args.prefilter
+        report = run_pair_sieve(
+            X,
+            k=args.k,
+            prefilter=pf,
+            prefilter_q=float(args.q),
+            chi=args.chi,
+            chi_seed=args.chi_seed,
+            as_json=as_json,
+        )
         report["source"] = source
 
         if as_json:
@@ -173,6 +217,8 @@ def main() -> int:
                 f"identity_ok={report['identity_ok']} strategy={report['strategy']} "
                 f"promote_ready=false"
             )
+            if report.get("prefilter"):
+                line += f" prefilter={report['prefilter']} dropped={report['n_dropped']}"
             if report.get("chi_on"):
                 line += f" chi_pick={report['chi_pick']} chi_token={report['chi_token']}"
             print(line)
@@ -183,7 +229,10 @@ def main() -> int:
         if args.out:
             out = Path(args.out)
             out.mkdir(parents=True, exist_ok=True)
-            ranks = rank(X, memory_pressure=False)
+            Xp = X
+            if pf:
+                Xp, _ = apply_prefilter(X, name=pf, q=float(args.q))
+            ranks = _load_rank()(Xp, memory_pressure=False)
             np.save(out / "ranks.npy", ranks)
             (out / "report.json").write_text(json.dumps(report, indent=2))
 
