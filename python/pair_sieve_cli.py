@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-GYR-SIEVE-001 pair sieve CLI (Track 1 + Track 2 χ + Track 3 prefilter)
+GYR-SIEVE-001/002 pair sieve CLI (Tracks 1–3 + Ticket B prym)
 
 Two numeric objectives. Calls GyroRank (no Python Fenwick reimplementation).
---prefilter off by default (S7: off ≡ Track 1).
+--prefilter off by default (S7: off \u2261 Track 1).
 --chi off by default.
 promote_ready=false.
 """
@@ -18,12 +18,12 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.3.0-pair-sieve-prefilter"
+VERSION = "0.4.0-pair-sieve-prym"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
 
-from prefilter import apply_prefilter, run_falsifier, PREFILTER_NAME, DEFAULT_Q  # Track 3
+from prefilter import apply_prefilter, run_falsifier, PREFILTER_NAME, DEFAULT_Q
 
 
 def die(code: int, msg: str, *, as_json: bool = False) -> None:
@@ -86,7 +86,7 @@ def run_pair_sieve(
     as_json: bool = False,
 ) -> dict:
     rank_fn = _load_rank()
-    from chi_pick import chi_pick  # Track 2
+    from chi_pick import chi_pick
     X_full = validate_matrix(X, as_json=as_json)
     n_full = int(X_full.shape[0])
     if k < 1:
@@ -155,7 +155,7 @@ def run_pair_sieve(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=f"GYR-SIEVE-001 pair sieve {VERSION}")
+    ap = argparse.ArgumentParser(description=f"GYR-SIEVE-001/002 pair sieve {VERSION}")
     ap.add_argument("--version", action="store_true")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--matrix", default=None, help="path to matrix.bin (N*2 float64)")
@@ -165,13 +165,17 @@ def main() -> int:
     ap.add_argument(
         "--prefilter",
         default="off",
-        choices=["off", "or_quantile"],
-        help="Track 3: named prefilter (default: off). or_quantile = bottom-q on obj0 OR obj1",
+        choices=["off", "or_quantile", "prym"],
+        help="Named prefilter (default: off). or_quantile | prym (path-local residual band)",
     )
     ap.add_argument("--q", type=float, default=DEFAULT_Q, help="or_quantile fraction (default 0.25)")
-    ap.add_argument("--chi", action="store_true", help="Track 2: run χ pick on front F (off by default)")
-    ap.add_argument("--chi-seed", type=int, default=0, help="documented seed/tape for χ pick")
-    ap.add_argument("--falsifier", action="store_true", help="Track 3 S9: run named keep/drop falsifier and exit")
+    ap.add_argument("--chi", action="store_true", help="Track 2: run chi pick on front F (off by default)")
+    ap.add_argument("--chi-seed", type=int, default=0, help="documented seed/tape for chi pick")
+    ap.add_argument(
+        "--falsifier",
+        action="store_true",
+        help="Run named keep/drop falsifier and exit (uses --prefilter to select or_quantile|prym; default or_quantile)",
+    )
     ap.add_argument("--out", default=None, help="optional output directory")
     args = ap.parse_args()
     as_json = bool(args.json)
@@ -181,7 +185,9 @@ def main() -> int:
         return 0
 
     if args.falsifier:
-        result = run_falsifier(q=float(args.q))
+        # B3: --falsifier with --prefilter prym → prym fixture; else or_quantile
+        fname = "prym" if args.prefilter == "prym" else "or_quantile"
+        result = run_falsifier(q=float(args.q), name=fname)
         print(json.dumps(result, indent=2) if as_json else result)
         return 0 if result["falsifier_ok"] else 9
 
