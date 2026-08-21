@@ -52,4 +52,14 @@ def rank_report(matrix: np.ndarray, memory_pressure: bool = False) -> dict:
     return info
 
 
-__all__ = ["rank", "rank_report"]
+def rank_fenwick_ref(matrix: np.ndarray) -> np.ndarray:
+    """F3 Fenwick oracle: exact_rank_2d_fenwick only (no controller)."""
+    X = np.ascontiguousarray(matrix, dtype=np.float64)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError("matrix must be (N, 2)")
+    ranks = np.empty(X.shape[0], dtype=np.int32)
+    _native.rank_fenwick_ref(X, ranks)
+    return ranks
+
+
+__all__ = ["rank", "rank_report", "rank_fenwick_ref"]

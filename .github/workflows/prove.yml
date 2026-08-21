@@ -1,0 +1,40 @@
+# GYR-FIX-001 F2 — product heartbeat
+name: prove
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq g++ python3 python3-dev python3-pip
+
+      - name: Python deps
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install numpy pybind11 setuptools wheel
+
+      - name: Build binding
+        run: |
+          cd python/bindings
+          python3 setup.py build_ext --inplace
+
+      - name: --prove
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          python3 python/pair_sieve_cli.py --prove --json | tee /tmp/prove.json
+          python3 -c "import json; r=json.load(open('/tmp/prove.json')); assert r.get('prove_ok') is True, r; print('prove_ok=true')"
+
+      - name: book CSV identity
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --json | tee /tmp/book.json
+          python3 -c "import json; r=json.load(open('/tmp/book.json')); assert r.get('identity_ok') is True, r; assert r.get('identity_mode') in ('fenwick_oracle','fenwick_repeat'), r; print(r['identity_mode'], 'ok')"

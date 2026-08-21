@@ -8,6 +8,7 @@
  * Phase 3: cheap observe (sample S≤1024) + striate writing dumpable U[k].
  *
  * Exact M=2 path is FenwickMax only. memory_pressure is currently a no-op for algorithm selection.
+ * GYR-FIX-001 F4: U_ initializer length matches Strategy::COUNT.
  */
 
 #pragma once
@@ -27,8 +28,6 @@
 #include <omp.h>
 #endif
 
-// Official Orson Peters pdqsort (preferred) with clean fallback
-// Variadic so commas inside comparator lambdas do not split the macro
 #if __has_include("pdqsort.h")
   #include "pdqsort.h"
   #define GYRO_SORT(...) ::pdqsort(__VA_ARGS__)
@@ -380,7 +379,7 @@ public:
 
 private:
     GyroFeatures feats_;
-    double U_[static_cast<int>(Strategy::COUNT)] = {GYRO_INF, GYRO_INF, GYRO_INF, GYRO_INF, GYRO_INF};
+    double U_[static_cast<int>(Strategy::COUNT)] = {GYRO_INF, GYRO_INF, GYRO_INF, GYRO_INF};
 };
 
 inline void execute_gyro_rank_ex(const double* matrix_in,
