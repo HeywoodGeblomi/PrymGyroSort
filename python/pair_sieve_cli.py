@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.5.1-pair-sieve-prove"
+VERSION = "0.6.0-pair-sieve-chi"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
@@ -205,7 +205,7 @@ def main():
     ap.add_argument("--k", type=int, default=1)
     ap.add_argument("--prefilter", default="off", choices=["off", "or_quantile", "prym"])
     ap.add_argument("--q", type=float, default=DEFAULT_Q)
-    ap.add_argument("--chi", action="store_true")
+    ap.add_argument("--chi", action="store_true", help="optional irreversible pick among undominated set (off by default)")
     ap.add_argument("--chi-seed", type=int, default=0)
     ap.add_argument("--falsifier", action="store_true")
     ap.add_argument(
@@ -312,21 +312,33 @@ def main():
             (out / "report.json").write_text(json.dumps(report, indent=2))
             rank1 = set(int(i) for i in np.flatnonzero(np.asarray(ranks) == 1))
             front_path = out / "front.csv"
+            chi_pick_idx = report.get("chi_pick") if report.get("chi_on") else None
             if csv_rows is not None and not pf:
+                fields = list(csv_fields) + ["rank"]
+                if chi_pick_idx is not None:
+                    fields.append("chi_pick")
                 with front_path.open("w", newline="") as f:
-                    w = _csv.DictWriter(f, fieldnames=list(csv_fields) + ["rank"])
+                    w = _csv.DictWriter(f, fieldnames=fields)
                     w.writeheader()
                     for i, row in enumerate(csv_rows):
                         if i in rank1:
                             r = dict(row)
                             r["rank"] = 1
+                            if chi_pick_idx is not None:
+                                r["chi_pick"] = 1 if i == int(chi_pick_idx) else 0
                             w.writerow(r)
             else:
                 with front_path.open("w", newline="") as f:
                     w = _csv.writer(f)
-                    w.writerow(["idx", "x", "y", "rank"])
+                    hdr = ["idx", "x", "y", "rank"]
+                    if chi_pick_idx is not None:
+                        hdr.append("chi_pick")
+                    w.writerow(hdr)
                     for i in sorted(rank1):
-                        w.writerow([i, float(Xp[i, 0]), float(Xp[i, 1]), 1])
+                        row = [i, float(Xp[i, 0]), float(Xp[i, 1]), 1]
+                        if chi_pick_idx is not None:
+                            row.append(1 if i == int(chi_pick_idx) else 0)
+                        w.writerow(row)
 
         return 0 if report["identity_ok"] else 4
     except SystemExit:
