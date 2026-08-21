@@ -1,0 +1,9 @@
+id,score0,score1,label
+A,1.0,1.0,front
+B,1.5,0.5,front
+C,2.0,3.0,mid
+D,3.0,2.0,mid
+E,4.0,4.0,mid
+F,5.0,1.5,mid
+G,10.0,10.0,dominated
+H,12.0,11.0,dominated
