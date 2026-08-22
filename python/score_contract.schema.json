@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScoreContract",
+  "type": "object",
+  "required": ["schema_version", "axes"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "0.1.0"
+    },
+    "contract_id": {
+      "type": "string"
+    },
+    "axes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["name", "sense"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "units": {
+            "type": "string"
+          },
+          "sense": {
+            "type": "string",
+            "enum": ["lower", "higher"]
+          },
+          "formula_or_procedure_id": {
+            "type": "string",
+            "description": "Procedure or data-source ID that produces the score; no free-text vibes"
+          },
+          "bounds": {
+            "type": "object",
+            "properties": {
+              "min": { "type": "number" },
+              "max": { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "score_kind": {
+      "type": "string",
+      "enum": ["observed", "model", "mixed"],
+      "default": "observed",
+      "description": "observed = measured scores only; model or mixed require a separate model seal (refuse predicted-as-observed)"
+    },
+    "producer": {
+      "type": "string"
+    },
+    "derived": {
+      "type": "boolean",
+      "description": "true when auto-derived from CLI columns/senses rather than an explicit --contract file"
+    },
+    "hash_alg": {
+      "type": "string",
+      "const": "sha256"
+    }
+  },
+  "additionalProperties": false
+}
