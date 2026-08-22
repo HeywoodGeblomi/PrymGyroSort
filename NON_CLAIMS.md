@@ -10,6 +10,10 @@
 
 Optional structured definition of the two axes (name, sense, unit, procedure id) with a canonical hash embedded in the report. When present, `verify_bundle` recomputes and matches the hash (V5). When absent, verify stays soft (backward compatible). A Score Contract is a **label of how the two numbers were meant to be computed** — not a proof that the world matches the label, not certainty, not a third objective.
 
+## Front Diff (DOM-FD-001)
+
+`front_diff` compares two verified seals and reports which front members entered, left, or stayed. Both inputs must pass `verify_bundle` first. It is **change detection on two seals**, not a re-rank, not a forecast, not a third objective.
+
 ## What this product is not
 
 1. **Not a predictive model.** Structural weak-dominance isolation, not a forecast.
