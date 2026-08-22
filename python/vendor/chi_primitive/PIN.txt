@@ -1,3 +1,4 @@
 Pin: 7cd60a7ac325d78f536628f090ea8bc57f9ae010
 Repo: HeywoodGeblomi/non-reducible-commitment
 Date: 2026-08-20
+Note: ChiState API unchanged through THEOREM main tip 8a124a29805c18b86e2150f570c58944444ab919 (NRC-THM-001 T+P).
