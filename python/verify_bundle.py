@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""PGS-BUN-001 / PGS-PRO-001 — offline verifier for sealed pair-sieve front bundles.
+"""PGS-BUN / PGS-PRO / DOM-SC-001 — offline verifier for sealed pair-sieve front bundles.
 
 Product: front.csv + report.json + MANIFEST.sha256
-Exit 0 = pass. Exit 1 + one-line reason = fail. No soft pass.
+Exit 0 = pass. Exit 1 + one-line reason = fail.
 
 V1: report.json parses; identity_ok true; identity_mode == fenwick_oracle
 V2: MANIFEST.sha256 matches SHA256 of front.csv and report.json
-V3: if chi_on: chi_pick present; chi_token is str containing r_chi=; reject null/missing
+V3: if chi_on: chi_pick present; chi_token is str containing r_chi=
 V4: when chi_on, token lacking r_chi= FAILS (hash-only rejected)
+V5: Score Contract — if score_contract / score_contract_hash absent → soft pass;
+     if present → recompute hash via score_contract.verify_contract_hash or fail.
 
-promote_ready is set by the sealer (true when identity_ok + fenwick_oracle).
-Verifier does not gate on it. No second kernel. gyro_rank.hpp untouched.
+Verifier does not gate on promote_ready. No second kernel.
 """
 from __future__ import annotations
 
@@ -32,7 +33,6 @@ def sha256_file(p: Path) -> str:
 
 
 def load_front_ids(front_path: Path) -> set:
-    """Extract identifiers present on the front."""
     ids = set()
     with front_path.open(newline="") as f:
         reader = csv.DictReader(f)
@@ -55,6 +55,33 @@ def load_front_ids(front_path: Path) -> set:
     return ids
 
 
+def verify_score_contract(report: dict) -> str | None:
+    """Return error message or None if OK / soft-absent."""
+    sc = report.get("score_contract")
+    sch = report.get("score_contract_hash")
+    if sc is None and sch is None:
+        return None  # V5 soft-when-absent
+    if sc is None or sch is None:
+        return "score_contract and score_contract_hash must both be present or both absent"
+    try:
+        from score_contract import verify_contract_hash
+    except ImportError:
+        # fallback: recompute with same canonical rule if helper missing
+        try:
+            from score_contract import hash_contract
+            if hash_contract(sc) != sch:
+                return "score_contract_hash mismatch"
+            return None
+        except Exception as e:
+            return f"score_contract verify unavailable: {e}"
+    try:
+        if not verify_contract_hash(sc, sch):
+            return "score_contract_hash mismatch"
+    except Exception as e:
+        return f"score_contract verify error: {e}"
+    return None
+
+
 def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
     if not dir_path.is_dir():
         return fail(f"bundle dir not found: {dir_path}")
@@ -70,7 +97,6 @@ def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
     if not manifest.is_file():
         return fail("missing MANIFEST.sha256")
 
-    # MANIFEST integrity
     try:
         lines = [ln.strip() for ln in manifest.read_text().splitlines() if ln.strip()]
     except OSError as e:
@@ -94,7 +120,6 @@ def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
         if got != want:
             return fail(f"MANIFEST mismatch: {name}")
 
-    # V1: report parse + identity
     try:
         report = json.loads(report_path.read_text())
     except (OSError, json.JSONDecodeError) as e:
@@ -109,12 +134,10 @@ def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
     if report.get("identity_mode") != "fenwick_oracle":
         return fail(f"identity_mode is not fenwick_oracle: {report.get('identity_mode')!r}")
 
-    # V2: identity_sha256 presence
     sha = report.get("identity_sha256")
     if not isinstance(sha, str) or len(sha) < 16:
         return fail("identity_sha256 missing or short")
 
-    # V3 / V4: chi path
     chi_on = bool(report.get("chi_on"))
     if chi_on:
         token = report.get("chi_token")
@@ -137,16 +160,19 @@ def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
         if front_ids and pick_i not in front_ids:
             return fail(f"chi_pick {pick_i} not in front ids")
 
+    # V5 Score Contract
+    sc_err = verify_score_contract(report)
+    if sc_err:
+        return fail(sc_err)
+
     return 0
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PGS-BUN-001 / PGS-PRO-001 verify sealed front bundle")
+    ap = argparse.ArgumentParser(description="Verify sealed front bundle")
     ap.add_argument("dir", type=Path, help="bundle directory")
-    ap.add_argument("--trust-hash", action="store_true", default=True,
-                    help="trust identity_sha256 when input CSV is not in the bundle (default)")
-    ap.add_argument("--no-trust-hash", action="store_true",
-                    help="stricter mode (still limited without input CSV / ranks)")
+    ap.add_argument("--trust-hash", action="store_true", default=True)
+    ap.add_argument("--no-trust-hash", action="store_true")
     args = ap.parse_args(argv)
     trust = not bool(args.no_trust_hash)
     return verify(args.dir, trust_hash=trust)

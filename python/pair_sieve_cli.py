@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GYR-SIEVE-003 Pair Sieve Product CLI. Sealed front; promote_ready on identity_ok (PGS-PRO-001). Fenwick-only."""
+"""GYR-SIEVE-003 Pair Sieve Product CLI. Sealed-front job; promote_ready on identity_ok (PGS-PRO-001). Fenwick-only. Score Contract DOM-SC-001."""
 from __future__ import annotations
 
 import argparse
@@ -12,12 +12,13 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.6.2-promote"
+VERSION = "0.6.3-score-contract"  # DOM-SC-001 / DOM-AXX Step 6
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
 
 from prefilter import apply_prefilter, run_falsifier, DEFAULT_Q
+from score_contract import make_derived_contract
 
 
 def die(code, msg, *, as_json=False):
@@ -302,6 +303,13 @@ def main():
             x_sense=args.x_sense,
             y_sense=args.y_sense,
         )
+
+        # DOM-SC-001 / DOM-AXX Step 6: Score Contract (additive, derived)
+        sc, sc_hash = make_derived_contract(
+            str(x_name), str(y_name), args.x_sense, args.y_sense, str(source)
+        )
+        report["score_contract"] = sc
+        report["score_contract_hash"] = sc_hash
 
         if as_json:
             print(json.dumps(report))
