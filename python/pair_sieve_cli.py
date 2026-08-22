@@ -215,7 +215,12 @@ def main():
         action="store_true",
         help="P3: S1 identity (N=1e5) + both falsifiers; exit 0 iff prove_ok",
     )
-    ap.add_argument("--out", default=None)
+    ap.add_argument("--out", default=None, help="internal dump dir (ranks.npy + front.csv + report.json)")
+    ap.add_argument(
+        "--bundle",
+        default=None,
+        help="sealed product dir: front.csv + report.json + MANIFEST.sha256 (no ranks.npy required)",
+    )
     args = ap.parse_args()
     as_json = bool(args.json)
 
@@ -308,13 +313,13 @@ def main():
                 f"strategy={report['strategy']} promote_ready=false"
             )
 
-        if args.out:
-            out = Path(args.out)
-            out.mkdir(parents=True, exist_ok=True)
-            np.save(out / "ranks.npy", ranks)
-            (out / "report.json").write_text(json.dumps(report, indent=2))
+        def write_front_and_report(dest: Path, *, write_ranks: bool = False) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+            if write_ranks:
+                np.save(dest / "ranks.npy", ranks)
+            (dest / "report.json").write_text(json.dumps(report, indent=2) + "\n")
             rank1 = set(int(i) for i in np.flatnonzero(np.asarray(ranks) == 1))
-            front_path = out / "front.csv"
+            front_path = dest / "front.csv"
             chi_pick_idx = report.get("chi_pick") if report.get("chi_on") else None
             if csv_rows is not None and not pf:
                 fields = list(csv_fields) + ["rank"]
@@ -342,6 +347,19 @@ def main():
                         if chi_pick_idx is not None:
                             row.append(1 if i == int(chi_pick_idx) else 0)
                         w.writerow(row)
+
+        if args.out:
+            write_front_and_report(Path(args.out), write_ranks=True)
+
+        if getattr(args, "bundle", None):
+            bdir = Path(args.bundle)
+            write_front_and_report(bdir, write_ranks=False)
+            lines = []
+            for name in ("front.csv", "report.json"):
+                p = bdir / name
+                h = hashlib.sha256(p.read_bytes()).hexdigest()
+                lines.append(f"{h}  {name}")
+            (bdir / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")
 
         return 0 if report["identity_ok"] else 4
     except SystemExit:
