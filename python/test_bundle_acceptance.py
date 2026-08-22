@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PGS-BUN-001 acceptance: B1–B5 style checks. promote_ready=false. No kernel."""
+"""PGS-BUN / DOM-SC-001 acceptance: B1–B6. No kernel."""
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +27,6 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pgs_bun_") as td:
         td = Path(td)
         clean = td / "clean"
-        # B1 + B2: --bundle writes three files; verify exit 0
         r = run(
             [
                 sys.executable,
@@ -52,7 +51,6 @@ def main() -> int:
             if v.returncode != 0:
                 fails.append(f"B2 verify clean failed: {v.stderr.strip()}")
 
-        # B3: chi_on + token without r_chi= → exit 1
         chi_dir = td / "chi"
         r = run(
             [
@@ -87,7 +85,6 @@ def main() -> int:
                 if v.returncode != 1:
                     fails.append(f"B3 expected exit 1 for hash-only, got {v.returncode}")
 
-        # B4: tamper front → exit 1
         tamp = td / "tamp"
         shutil.copytree(clean, tamp)
         with (tamp / "front.csv").open("a") as f:
@@ -96,7 +93,6 @@ def main() -> int:
         if v.returncode != 1:
             fails.append(f"B4 expected exit 1 for tamper, got {v.returncode}")
 
-        # B5: gyro_rank.hpp untouched
         if GYRO.is_file():
             got = hashlib.sha256(GYRO.read_bytes()).hexdigest()
             if got != GYRO_SHA:
@@ -104,11 +100,46 @@ def main() -> int:
         else:
             fails.append("B5 gyro_rank.hpp missing")
 
+        # B6: score_contract_hash mismatch → verify exit 1
+        sc_dir = td / "sc_bad"
+        shutil.copytree(clean, sc_dir)
+        rep = json.loads((sc_dir / "report.json").read_text())
+        if "score_contract" in rep and "score_contract_hash" in rep:
+            rep["score_contract_hash"] = "0" * 64
+            (sc_dir / "report.json").write_text(json.dumps(rep, indent=2) + "\n")
+            lines = []
+            for name in ("front.csv", "report.json"):
+                h = hashlib.sha256((sc_dir / name).read_bytes()).hexdigest()
+                lines.append(f"{h}  {name}")
+            (sc_dir / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")
+            v = run([sys.executable, str(VERIFY), str(sc_dir)])
+            if v.returncode != 1:
+                fails.append(f"B6 expected exit 1 for contract hash mismatch, got {v.returncode}: {v.stderr.strip()}")
+        else:
+            # soft-when-absent: inject a fake contract with bad hash
+            rep["score_contract"] = {
+                "version": "0.1",
+                "axes": [
+                    {"name": "risk", "sense": "lower", "unit": "1", "formula_or_procedure_id": "test"},
+                    {"name": "cost", "sense": "lower", "unit": "1", "formula_or_procedure_id": "test"},
+                ],
+            }
+            rep["score_contract_hash"] = "0" * 64
+            (sc_dir / "report.json").write_text(json.dumps(rep, indent=2) + "\n")
+            lines = []
+            for name in ("front.csv", "report.json"):
+                h = hashlib.sha256((sc_dir / name).read_bytes()).hexdigest()
+                lines.append(f"{h}  {name}")
+            (sc_dir / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")
+            v = run([sys.executable, str(VERIFY), str(sc_dir)])
+            if v.returncode != 1:
+                fails.append(f"B6 expected exit 1 for injected bad contract hash, got {v.returncode}: {v.stderr.strip()}")
+
     if fails:
         for f in fails:
             print(f"FAIL: {f}", file=sys.stderr)
         return 1
-    print("B1–B5 acceptance GREEN")
+    print("B1–B6 acceptance GREEN")
     return 0
 
 
