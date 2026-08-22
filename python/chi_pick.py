@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-GYR-SIEVE-003 P4 — χ as product pick (optional irreversible pick among undominated).
+GYR-SIEVE-003 P4 / NRC-THM-001-C — χ as product pick (optional irreversible pick among undominated).
 
 χ sees the front F only. Never writes ranks. Never calls ranking.
 Copy: optional irreversible pick among the undominated set — not "AI allocation."
 
 Vendored ChiState from HeywoodGeblomi/non-reducible-commitment
   Pin SHA: 7cd60a7ac325d78f536628f090ea8bc57f9ae010
+  THEOREM tip: 8a124a29805c18b86e2150f570c58944444ab919 (T1–T5 green; promote_ready=false)
   Path: python/vendor/chi_primitive/
 
-Documented tape (P4):
+Documented tape (must include commit + reveal; hash-only is the rejected double):
   Sort F ascending. ChiState(chi=1).
   Commit exactly (abs(seed) % 3) + 1 times.
   Call reveal() once so r_chi is non-zero and drives the token.
@@ -18,6 +19,7 @@ Documented tape (P4):
   safe_token() is report chi_token; raw χ never in JSON.
 
 |F|==0 fail-closed. |F|==1 returns that id (still commits + reveal for the record).
+--chi remains default off. Hash-only (SHA256(seed||sorted F) without tape) is a test double only.
 """
 from __future__ import annotations
 

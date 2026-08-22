@@ -41,6 +41,8 @@ python3 python/pair_sieve_cli.py --prove --json
 python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --chi --json
 ```
 
+`--chi` is **off by default**. When on, `chi_pick` uses the ChiState commit+reveal tape (not a pure hash of F). Hash-only is the rejected double (see `python/test_nrc_thm_001_c.py`). `promote_ready=false`.
+
 ## License
 
 MIT. Kernel: [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) Fenwick-only.

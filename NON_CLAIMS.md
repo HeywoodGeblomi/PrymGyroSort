@@ -15,10 +15,14 @@
 
 ## χ (optional)
 
-When `--chi` is on, one index is selected from the undominated front. Ranks are not rewritten. Optional irreversible pick among undominated rows — not “AI allocation.”
+When `--chi` is on, one index is selected from the undominated front via `chi_pick`: ChiState **commit + reveal** tape is mixed into the index hash (NRC-THM-001-C). Ranks are not rewritten. Optional irreversible pick among undominated rows — not “AI allocation.”
+
+- Default path uses the dynamic commit/reveal tape; a pure hash of sorted F (no ChiState) is the **rejected test double**.
+- `--chi` is off by default. `promote_ready=false`.
+- Spec: [non-reducible-commitment docs/THEOREM.md](https://github.com/HeywoodGeblomi/non-reducible-commitment/blob/main/docs/THEOREM.md) (T1–T5).
 
 ## Language to avoid
 
 - “LowAux2D”, “N≥65536 → LowAux2D”
 - “global Lyapunov”, “spectrum certificate”
-- “alpha”, “guaranteed profitable”
+- “alpha”, “guaranteed profitable"
