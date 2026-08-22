@@ -16,26 +16,29 @@
 | median_income | higher | x-score (median household income in block group, units of $10k) |
 | median_house_value | higher | y-score (median house value in block group, USD) |
 
-Exactly two score columns used. All other original columns (longitude, latitude, housing_median_age, total_rooms, total_bedrooms, population, households, ocean_proximity) ignored.
+Exactly two score columns used. All other original columns ignored.
 
-## Row filter
+## Row filter + documented slice
 
-1. Load full CSV (N_raw = 20 640).
+1. Load full CSV from the URL above (N_raw = 20 640).
 2. Select only `median_income` and `median_house_value`.
-3. Drop any row where either value is non-numeric or non-finite (NaN/Inf). In this mirror both columns are complete: **0 rows dropped**.
-4. Resulting N = **20 640**. Full dataset (not a slice).
+3. Drop any row where either value is non-numeric or non-finite. Both columns are complete → 0 dropped. Full N = 20 640.
+4. **Documented slice checked in**: first 10 000 rows after the filter (N = 10 000 ≥ 10⁴). The committed file `docs/stranger/california_housing_two_col.csv` contains exactly these 10 000 rows. Full data is recoverable from the public URL + the filter script below.
 
-Filter script (reproducible):
+Filter + slice script (reproducible):
 
 ```python
 import pandas as pd
-df = pd.read_csv("housing.csv")
+df = pd.read_csv("https://raw.githubusercontent.com/ageron/handson-ml/master/datasets/housing/housing.csv")
 clean = df[["median_income", "median_house_value"]].dropna()
 assert clean.shape[0] == 20640
-clean.to_csv("california_housing_two_col.csv", index=False)
+slice10k = clean.head(10000)
+slice10k.to_csv("california_housing_two_col.csv", index=False)
+# wc -l california_housing_two_col.csv  → 10001 (header + 10000)
 ```
 
 ## Notes
 
 - No investment, trading, or financial-product claims.
 - Used solely as a product-use stranger input for pair_sieve identity + receipt.
+- Slice vs full is explicit per ticket §3. Receipt n matches the committed file.
