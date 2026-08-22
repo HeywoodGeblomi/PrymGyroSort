@@ -1,4 +1,4 @@
-# GYR-FIX-001 F2 — product heartbeat
+# GYR-FIX-001 F2 + WORLD-A-001 — product heartbeat + sealed-front CI gate
 name: prove
 on:
   push:
@@ -38,3 +38,28 @@ jobs:
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
           python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --json | tee /tmp/book.json
           python3 -c "import json; r=json.load(open('/tmp/book.json')); assert r.get('identity_ok') is True, r; assert r.get('identity_mode') == 'fenwick_oracle', r; print(r['identity_mode'], 'ok')"
+
+      - name: book sealed bundle + verify
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          mkdir -p /tmp/book_bundle
+          python3 python/pair_sieve_cli.py \
+            --csv examples/book.csv \
+            --x-col risk --y-col cost \
+            --bundle /tmp/book_bundle
+          python3 python/verify_bundle.py /tmp/book_bundle
+          echo "book verify_bundle exit 0"
+          python3 -c "import json; r=json.load(open('/tmp/book_bundle/report.json')); assert r.get('identity_ok') is True; print('book identity_sha256=', r.get('identity_sha256')); print('promote_ready=', r.get('promote_ready'))"
+
+      - name: California stranger sealed bundle + verify
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          mkdir -p /tmp/ca_bundle
+          python3 python/pair_sieve_cli.py \
+            --csv docs/stranger/california_housing_two_col.csv \
+            --x-col median_income --y-col median_house_value \
+            --x-sense higher --y-sense higher \
+            --bundle /tmp/ca_bundle
+          python3 python/verify_bundle.py /tmp/ca_bundle
+          echo "CA verify_bundle exit 0"
+          python3 -c "import json; r=json.load(open('/tmp/ca_bundle/report.json')); assert r.get('identity_ok') is True; print('CA identity_sha256=', r.get('identity_sha256')); print('front_size=', r.get('front_size')); print('promote_ready=', r.get('promote_ready'))"
