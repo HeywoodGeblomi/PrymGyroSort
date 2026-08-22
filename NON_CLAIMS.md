@@ -6,6 +6,10 @@
 
 **`promote_ready=true` for this job only** when `identity_ok` and `identity_mode=fenwick_oracle`. The ranker library itself is not promoted as a universal ranking OS.
 
+## Score Contract (DOM-SC-001)
+
+Optional structured definition of the two axes (name, sense, unit, procedure id) with a canonical hash embedded in the report. When present, `verify_bundle` recomputes and matches the hash (V5). When absent, verify stays soft (backward compatible). A Score Contract is a **label of how the two numbers were meant to be computed** — not a proof that the world matches the label, not certainty, not a third objective.
+
 ## What this product is not
 
 1. **Not a predictive model.** Structural weak-dominance isolation, not a forecast.
@@ -31,3 +35,4 @@ When `--chi` is on, one index is selected from the undominated front via `chi_pi
 - “global Lyapunov”, “spectrum certificate”
 - “alpha”, “guaranteed profitable”
 - “AI allocation”
+- “certainty” from ranking possible vs plausible
