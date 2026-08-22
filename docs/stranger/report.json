@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "version": "0.6.1-fix-now",
+  "n": 10000,
+  "wall_ms": 2.8679,
+  "front_size": 32,
+  "k": 1,
+  "identity_sha256": "3a94ab3104a0f77f7378639f08b816ca7f76b9b00bde432542c7afd682bdb417",
+  "identity_ok": true,
+  "identity_mode": "fenwick_oracle",
+  "strategy": "Fenwick2D",
+  "promote_ready": false,
+  "source": "csv:docs/stranger/california_housing_two_col.csv",
+  "x_col": "median_income",
+  "y_col": "median_house_value",
+  "x_sense": "higher",
+  "y_sense": "higher"
+}
