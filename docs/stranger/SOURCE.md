@@ -18,27 +18,23 @@
 
 Exactly two score columns used. All other original columns ignored.
 
-## Row filter + documented slice
+## How to obtain the ≥10k file (authoritative)
 
-1. Load full CSV from the URL above (N_raw = 20 640).
-2. Select only `median_income` and `median_house_value`.
-3. Drop any row where either value is non-numeric or non-finite. Both columns are complete → 0 dropped. Full N = 20 640.
-4. **Documented slice checked in**: first 10 000 rows after the filter (N = 10 000 ≥ 10⁴). The committed file `docs/stranger/california_housing_two_col.csv` contains exactly these 10 000 rows. Full data is recoverable from the public URL + the filter script below.
-
-Filter + slice script (reproducible):
-
-```python
-import pandas as pd
-df = pd.read_csv("https://raw.githubusercontent.com/ageron/handson-ml/master/datasets/housing/housing.csv")
-clean = df[["median_income", "median_house_value"]].dropna()
-assert clean.shape[0] == 20640
-slice10k = clean.head(10000)
-slice10k.to_csv("california_housing_two_col.csv", index=False)
-# wc -l california_housing_two_col.csv  → 10001 (header + 10000)
+```bash
+python3 docs/stranger/filter_california_housing.py
+# → docs/stranger/california_housing_two_col.csv  (N=10000 data rows)
 ```
+
+The script:
+1. Downloads the public URL above.
+2. Selects only `median_income` and `median_house_value`.
+3. Drops non-finite / NA (0 rows dropped; full N=20640).
+4. Writes the documented first-10000-row slice (N ≥ 10⁴).
+
+Full 20640 is available by editing `N_SLICE` or removing `.head()`. Receipt was measured on the N=10000 slice produced by this script.
 
 ## Notes
 
 - No investment, trading, or financial-product claims.
 - Used solely as a product-use stranger input for pair_sieve identity + receipt.
-- Slice vs full is explicit per ticket §3. Receipt n matches the committed file.
+- Slice vs full is explicit per ticket §3.
