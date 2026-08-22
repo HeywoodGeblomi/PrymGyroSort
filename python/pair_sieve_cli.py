@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GYR-SIEVE-003 Pair Sieve Product CLI. promote_ready=false. Fenwick-only. GYR-FIX-001 F3."""
+"""GYR-SIEVE-003 Pair Sieve Product CLI. Sealed front; promote_ready on identity_ok (PGS-PRO-001). Fenwick-only."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "0.6.1-fix-now"
+VERSION = "0.6.2-promote"
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "python" / "bindings"))
@@ -145,7 +145,6 @@ def run_pair_sieve(X, k=1, *, prefilter=None, prefilter_q=DEFAULT_Q, chi=False, 
     t0 = time.perf_counter()
     ranks = np.ascontiguousarray(rank_fn(X, memory_pressure=False), dtype=np.int32)
     wall_ms = (time.perf_counter() - t0) * 1e3
-    # F3: identity vs Fenwick oracle (not vs itself)
     from prym_gyro import rank_fenwick_ref
     ranks_ref = np.ascontiguousarray(rank_fenwick_ref(X), dtype=np.int32)
     identity_ok = bool(np.array_equal(ranks, ranks_ref))
@@ -163,7 +162,7 @@ def run_pair_sieve(X, k=1, *, prefilter=None, prefilter_q=DEFAULT_Q, chi=False, 
         "identity_ok": identity_ok,
         "identity_mode": "fenwick_oracle",
         "strategy": "Fenwick2D",
-        "promote_ready": False,
+        "promote_ready": bool(identity_ok),
     }
     if prefilter:
         report.update(
@@ -219,13 +218,13 @@ def main():
     ap.add_argument(
         "--bundle",
         default=None,
-        help="sealed product dir: front.csv + report.json + MANIFEST.sha256 (no ranks.npy required)",
+        help="sealed product dir: front.csv + report.json + MANIFEST.sha256",
     )
     args = ap.parse_args()
     as_json = bool(args.json)
 
     if args.version:
-        print(json.dumps({"version": VERSION, "promote_ready": False}) if as_json else VERSION)
+        print(json.dumps({"version": VERSION, "promote_ready": True}) if as_json else VERSION)
         return 0
     if args.falsifier:
         fname = "prym" if args.prefilter == "prym" else "or_quantile"
@@ -260,7 +259,7 @@ def main():
             "ok": prove_ok,
             "prove_ok": prove_ok,
             "version": VERSION,
-            "promote_ready": False,
+            "promote_ready": bool(prove_ok),
             "checks": results,
         }
         print(json.dumps(out, indent=2) if as_json else out)
@@ -310,7 +309,7 @@ def main():
             print(
                 f"[pair_sieve] n={report['n']} wall_ms={report['wall_ms']:.3f} "
                 f"front_size={report['front_size']} identity_ok={report['identity_ok']} "
-                f"strategy={report['strategy']} promote_ready=false"
+                f"strategy={report['strategy']} promote_ready={report['promote_ready']}"
             )
 
         def write_front_and_report(dest: Path, *, write_ranks: bool = False) -> None:

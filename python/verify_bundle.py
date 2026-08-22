@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PGS-BUN-001 — offline verifier for sealed pair-sieve front bundles.
+"""PGS-BUN-001 / PGS-PRO-001 — offline verifier for sealed pair-sieve front bundles.
 
 Product: front.csv + report.json + MANIFEST.sha256
 Exit 0 = pass. Exit 1 + one-line reason = fail. No soft pass.
@@ -9,7 +9,8 @@ V2: MANIFEST.sha256 matches SHA256 of front.csv and report.json
 V3: if chi_on: chi_pick present; chi_token is str containing r_chi=; reject null/missing
 V4: when chi_on, token lacking r_chi= FAILS (hash-only rejected)
 
-promote_ready remains false. No second kernel. gyro_rank.hpp untouched.
+promote_ready is set by the sealer (true when identity_ok + fenwick_oracle).
+Verifier does not gate on it. No second kernel. gyro_rank.hpp untouched.
 """
 from __future__ import annotations
 
@@ -140,7 +141,7 @@ def verify(dir_path: Path, *, trust_hash: bool = True) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PGS-BUN-001 verify sealed front bundle")
+    ap = argparse.ArgumentParser(description="PGS-BUN-001 / PGS-PRO-001 verify sealed front bundle")
     ap.add_argument("dir", type=Path, help="bundle directory")
     ap.add_argument("--trust-hash", action="store_true", default=True,
                     help="trust identity_sha256 when input CSV is not in the bundle (default)")
