@@ -1,0 +1,41 @@
+COMMERCIAL LICENSE
+==================
+
+Copyright (c) 2026 Heywood Geblomi. All rights reserved.
+
+This software is available under a paid proprietary Commercial License
+in addition to the AGPLv3 community path described in LICENSE.
+
+GRANT (when issued in writing by the copyright holder)
+-----------------------------------------------------
+Subject to payment of the applicable fees and the terms of a signed
+commercial grant, the copyright holder grants the licensee a perpetual,
+worldwide, non-exclusive, non-transferable (except to affiliates) license to:
+
+  - use, modify, and embed the software in commercial products and services
+  - distribute object code and closed-source derivatives without AGPL
+    source-disclosure obligations
+  - offer the software as part of a SaaS or hosted service without
+    triggering AGPL network-use source requirements
+
+The commercial grant does NOT include:
+
+  - a right to re-license the software under MIT, BSD, Apache, or any
+    other open-source license
+  - a right to remove copyright notices
+  - any warranty beyond what is expressly stated in the signed grant
+    (default: AS IS, no warranty)
+
+THIRD-PARTY COMPONENTS
+----------------------
+Third-party components bundled with this software (if any) retain their
+original licenses. The commercial grant does not re-license third-party
+code. See NOTICE (if present) for details.
+
+HOW TO OBTAIN
+-------------
+Contact the copyright holder to request a commercial license.
+See COMMERCIAL.md in this repository for contact and scope summary.
+
+Until a commercial grant is issued in writing, all use is governed by
+the AGPLv3 terms in LICENSE.

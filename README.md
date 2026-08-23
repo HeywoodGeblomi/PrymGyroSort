@@ -4,7 +4,7 @@
 
 `promote_ready=true` for this job only — not a universal ranking OS, not a second kernel, not investment advice.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Dual AGPL/Commercial](https://img.shields.io/badge/License-Dual%20AGPL%2FCommercial-blue.svg)](LICENSE)
 [![Honesty](https://img.shields.io/badge/honesty-NON__CLAIMS-important)](NON_CLAIMS.md)
 
 ## Seal and verify
@@ -73,4 +73,11 @@ Read **[NON_CLAIMS.md](NON_CLAIMS.md)**. Product is **isolation + proof**, not p
 
 ## License
 
-MIT. Kernel: [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) Fenwick-only (library; not promoted as an OS).
+**Dual licensed.**
+
+- Non-commercial / research / evaluation / non-production → **AGPLv3** (see [LICENSE](LICENSE) and [LICENSE-AGPL](LICENSE-AGPL))
+- Any commercial use, production deployment, embedding, SaaS, or redistribution as product → **requires a commercial license** from the copyright holder (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) and [COMMERCIAL.md](COMMERCIAL.md)).
+
+Copyright (c) 2026 Heywood Geblomi.
+
+Kernel: [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) Fenwick-only (library; not promoted as an OS).
