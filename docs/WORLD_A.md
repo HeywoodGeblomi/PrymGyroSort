@@ -6,6 +6,8 @@ No ranking OS claims. No forecasts. No trading advice. See [NON_CLAIMS.md](../NO
 
 When two independent machines produce the same `identity_sha256` on the same input and both pass `verify_bundle`, you have external evidence. When a non-authored workflow fails if `verify_bundle` fails, you have A-shaped use.
 
+**Until at least one independent external matching identity exists, do not claim absolute A.** The product is `promote_ready=true` for the sealed-front job only.
+
 ## Prerequisites (≤2 min)
 
 - Python 3.8+
@@ -21,7 +23,7 @@ cd python/bindings && python3 setup.py build_ext --inplace && cd ../..
 export PYTHONPATH="${PWD}/python:${PWD}/python/bindings"
 ```
 
-(Replace the branch/tag with the current WORLD-A release tag once published. The binding build is required once; subsequent runs in the same environment reuse it.)
+(`v0.7.0-world-a` pins the sealed-front identity. Later main is compatible for the Fenwick identity; Score Contract / Front Diff are additive product layers and do not change the identity hash for the same input.)
 
 ## Path A — Book example (built-in, ~30 s)
 
@@ -57,7 +59,15 @@ cat /tmp/stranger/report.json
 # note identity_sha256, identity_ok=true, identity_mode=fenwick_oracle, promote_ready=true
 ```
 
-The identity_sha256 for the committed extract is also recorded in [docs/stranger/STRANGER_RECEIPT.md](stranger/STRANGER_RECEIPT.md) (re-measure after any kernel change).
+**Expected locked identity for the committed extract:**
+
+```
+identity_sha256 = 3a94ab3104a0f77f7378639f08b816ca7f76b9b00bde432542c7afd682bdb417
+n = 10000
+front_size = 32
+```
+
+Recorded in [docs/stranger/STRANGER_RECEIPT.md](stranger/STRANGER_RECEIPT.md). Re-measure only after a kernel / Fenwick change.
 
 Optional provenance re-filter (requires network + pandas):
 
@@ -92,6 +102,12 @@ Kernel remains [GyroRank](https://github.com/HeywoodGeblomi/GyroRank) Fenwick-on
 
 Every push to `main` runs the book + California sealed paths above and asserts `verify_bundle` exit 0. See `.github/workflows/prove.yml`.
 
+## GitHub About (UI)
+
+Repository description should read:
+
+> Exact 2-D Fenwick pair sieve. CSV in → sealed undominated front + identity hash + offline verify. promote_ready=true for this job only. Not a sort. Not a forecast.
+
 ---
 
-*WORLD-A-001. Absolute A in this niche requires at least one external reproduction (W3) and one non-authored use that fails when verify fails (W4). Until then, do not claim A.*
+*WORLD-A-002. Absolute A in this niche requires at least one external reproduction (independent matching identity_sha256) and one non-authored use that fails when verify fails. Until then, do not claim A. promote_ready remains job-scoped only.*

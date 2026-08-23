@@ -1,57 +1,35 @@
-# STRANGER_RECEIPT.md — PGS-STR-001
+# Stranger Receipt — California Housing extract
 
-**One stranger CSV. Identity + receipt. No new kernel.**
+**Source:** Public California Housing (1990 Census / Pace & Barry) two-column extract.
+**Producer:** `docs/stranger/filter_california_housing.py` (authoritative; pulls public URL when run with network).
+**Committed file:** `docs/stranger/california_housing_two_col.csv` (≥10k rows, no network required for stranger path).
 
-## Dataset
+## Locked identity (Fenwick oracle)
 
-- Name: California Housing (two-column extract, documented ≥10k slice)
-- Producer: `docs/stranger/filter_california_housing.py` (pulls SOURCE.md URL → writes the two-col file)
-- File produced: `docs/stranger/california_housing_two_col.csv`
-- n = **10000** (first 10k after filter; full recoverable N=20640)
-- x_col = median_income (sense = higher)
-- y_col = median_house_value (sense = higher)
-- After running the filter: `wc -l docs/stranger/california_housing_two_col.csv` = 10001
+```
+n              = 10000
+front_size     = 32
+identity_mode  = fenwick_oracle
+identity_ok    = true
+identity_sha256 = 3a94ab3104a0f77f7378639f08b816ca7f76b9b00bde432542c7afd682bdb417
+promote_ready  = true   # when identity_ok (current product behavior)
+```
 
-## Default run (χ off)
+Re-measure after any kernel / Fenwick change. Additive product layers (Score Contract, Front Diff) do not alter this Fenwick identity for the same input.
+
+Tip compatibility: v0.7.0-world-a and later main (as of 2026-08-23) produce the same identity_sha256.
+
+## Verify
 
 ```bash
-python3 docs/stranger/filter_california_housing.py
 python3 python/pair_sieve_cli.py \
   --csv docs/stranger/california_housing_two_col.csv \
   --x-col median_income --y-col median_house_value \
   --x-sense higher --y-sense higher \
-  --json --out docs/stranger/
+  --bundle /tmp/stranger
+
+python3 python/verify_bundle.py /tmp/stranger   # exit 0
+cat /tmp/stranger/report.json                   # identity_sha256 must match above
 ```
 
-### Report (measured on the file produced by the filter)
-
-| Field | Value |
-|-------|-------|
-| ok | true |
-| n | 10000 |
-| wall_ms | 2.8679 |
-| front_size | 32 |
-| identity_mode | fenwick_oracle |
-| identity_ok | **true** |
-| identity_sha256 | 3a94ab3104a0f77f7378639f08b816ca7f76b9b00bde432542c7afd682bdb417 |
-| strategy | Fenwick2D |
-| promote_ready | false |
-| version | 0.6.1-fix-now |
-
-## Optional χ run (default remains off)
-
-Re-run with `--chi` yields pick ∈ front and identical identity_sha256. Default χ remains off.
-
-## Acceptance checklist
-
-| ID | Pass |
-|----|------|
-| S1 | SOURCE.md names non-authored origin (1990 Census / Pace & Barry / Torgo / StatLib) |
-| S2 | CLI run on the file produced by the filter: identity_ok=true, fenwick_oracle, Fenwick2D; n matches |
-| S3 | Receipt on branch; book/listing/latency not used |
-| S4 | gyro_rank.hpp / Photonic / Geblomi untouched |
-| S5 | No UNIV/DAY language |
-
-**Done. One stranger. Stop.**
-
-No investment or trading claims.
+THE BEASTIE BOYZ · WORLD-A
