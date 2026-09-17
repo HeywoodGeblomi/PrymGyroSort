@@ -219,7 +219,7 @@ def main():
     ap.add_argument(
         "--bundle",
         default=None,
-        help="sealed product dir: front.csv + report.json + MANIFEST.sha256",
+        help="sealed product dir: front.csv + report.json + MANIFEST.sha256; then verify()",
     )
     args = ap.parse_args()
     as_json = bool(args.json)
@@ -367,6 +367,10 @@ def main():
                 h = hashlib.sha256(p.read_bytes()).hexdigest()
                 lines.append(f"{h}  {name}")
             (bdir / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")
+            from verify_bundle import verify
+            vrc = verify(bdir)
+            if vrc != 0:
+                return 4 if not report.get("identity_ok") else vrc
 
         return 0 if report["identity_ok"] else 4
     except SystemExit:
