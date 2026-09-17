@@ -10,14 +10,16 @@
 ## Seal and verify
 
 ```bash
-# Seal
+# Seal (writes three files, then calls verify())
 python3 python/pair_sieve_cli.py \
   --csv examples/book.csv --x-col risk --y-col cost \
   --bundle /tmp/b
 
-# Verify offline (exit 0 = pass)
+# Verify offline — re-check (exit 0 = pass)
 python3 python/verify_bundle.py /tmp/b
 ```
+
+`--bundle` writes `front.csv` + `report.json` + `MANIFEST.sha256` then calls `verify()`. Offline `python3 python/verify_bundle.py DIR` remains the re-check. Sealer and checker stay two machines.
 
 Bundle contents:
 
