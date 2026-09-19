@@ -1,45 +1,36 @@
-# PrymGyroSort — Sealed Front Product
+# PrymGyroSort
 
-**CSV two scores in → sealed undominated front out. Offline `verify_bundle` pass/fail.** Exact Fenwick identity hash. Optional χ pick (default off). Ranker stays a library.
+## What
 
-`promote_ready=true` for this job only — not a universal ranking OS, not a second kernel, not investment advice.
+2-col CSV → undominated front + sha256. Exact Fenwick 2-D pair sieve. Sealed bundle is `front.csv` + `report.json` + `MANIFEST.sha256`.
 
-[![License: Dual AGPL/Commercial](https://img.shields.io/badge/License-Dual%20AGPL%2FCommercial-blue.svg)](LICENSE)
-[![Honesty](https://img.shields.io/badge/honesty-NON__CLAIMS-important)](NON_CLAIMS.md)
-
-## Seal and verify
+## Run + verify
 
 ```bash
-# Seal (writes three files, then calls verify())
 python3 python/pair_sieve_cli.py \
   --csv examples/book.csv --x-col risk --y-col cost \
-  --bundle /tmp/b
+  --bundle artifacts/golden/book
 
-# Verify offline — re-check (exit 0 = pass)
-python3 python/verify_bundle.py /tmp/b
+python3 python/verify_bundle.py artifacts/golden/book
+# exit 0
+
+sha256sum -c artifacts/golden/book.sha256
+# or python3 python/verify_golden.py
 ```
 
-`--bundle` writes `front.csv` + `report.json` + `MANIFEST.sha256` then calls `verify()`. Offline `python3 python/verify_bundle.py DIR` remains the re-check. Sealer and checker stay two machines.
+Re-seal must match the checked-in `artifacts/golden/book` front and manifest. Default path is EXTERNAL-clean.
 
-Bundle contents:
+## Not a sort / not a forecast / default no-χ
 
-- **front.csv** — undominated rows + rank (optional `chi_pick` mark)
-- **report.json** — `identity_ok`, `identity_sha256`, `identity_mode=fenwick_oracle`, `strategy=Fenwick2D`, `promote_ready`
-- **MANIFEST.sha256** — SHA-256 of `front.csv` and `report.json` only
+Isolation + identity hash. Not a sort. Not a forecast. Not advice. Do not pass `--chi` on the default path. `--chi` is optional and non-default; golden and CI never pass it.
 
-Stranger path (California Housing extract):
+## Honesty
 
-```bash
-python3 docs/stranger/filter_california_housing.py
-python3 python/pair_sieve_cli.py \
-  --csv docs/stranger/california_housing_two_col.csv \
-  --x-col median_income --y-col median_house_value \
-  --x-sense higher --y-sense higher \
-  --bundle /tmp/stranger
-python3 python/verify_bundle.py /tmp/stranger
-```
+Read **[NON_CLAIMS.md](NON_CLAIMS.md)**.
 
-## Optional χ (default off)
+---
+
+## Optional χ (non-default)
 
 ```bash
 python3 python/pair_sieve_cli.py \
@@ -48,7 +39,7 @@ python3 python/pair_sieve_cli.py \
 python3 python/verify_bundle.py /tmp/bchi
 ```
 
-When `--chi` is on, `chi_token` must contain `r_chi=` (commit+reveal tape). A hash-only token fails verification.
+When `--chi` is on, `chi_token` must contain `r_chi=`. A hash-only token fails verification. Not used in golden or CI.
 
 ## Senses
 
@@ -68,10 +59,6 @@ higher-is-better = negate that column before Fenwick.
 ```bash
 python3 python/pair_sieve_cli.py --prove --json
 ```
-
-## Honesty
-
-Read **[NON_CLAIMS.md](NON_CLAIMS.md)**. Product is **isolation + proof**, not prediction. No alpha, no live trading, not multi-objective NSGA.
 
 ## License
 

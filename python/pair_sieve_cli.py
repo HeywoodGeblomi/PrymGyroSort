@@ -126,6 +126,23 @@ def ranks_sha256(ranks):
     return hashlib.sha256(np.ascontiguousarray(ranks, dtype=np.int32).tobytes()).hexdigest()
 
 
+def repo_rel_csv(path) -> str:
+    """Stable repo-relative CSV path for sealed reports (no machine prefix)."""
+    p = Path(path)
+    try:
+        resolved = p.resolve()
+        return resolved.relative_to(ROOT).as_posix()
+    except ValueError:
+        return Path(str(path)).as_posix().replace("\\", "/")
+
+
+def seal_report(report: dict) -> dict:
+    """Drop run-local fields so MANIFEST.sha256 is stable across machines."""
+    out = dict(report)
+    out.pop("wall_ms", None)
+    return out
+
+
 def run_pair_sieve(X, k=1, *, prefilter=None, prefilter_q=DEFAULT_Q, chi=False, chi_seed=0, as_json=False):
     rank_fn = _load_rank()
     from chi_pick import chi_pick
@@ -273,7 +290,8 @@ def main():
             X, x_name, y_name, csv_rows, csv_fields = load_csv(
                 args.csv, args.x_col, args.y_col, as_json=as_json
             )
-            source = f"csv:{args.csv}"
+            csv_rel = repo_rel_csv(args.csv)
+            source = f"csv:{csv_rel}"
             X = apply_senses(X, args.x_sense, args.y_sense)
         elif args.matrix:
             X = load_matrix(args.matrix, args.n, as_json=as_json)
@@ -303,28 +321,35 @@ def main():
             x_sense=args.x_sense,
             y_sense=args.y_sense,
         )
+        if args.csv:
+            report["csv"] = csv_rel
 
-        # DOM-SC-001 / DOM-AXX Step 6: Score Contract (additive, derived)
         sc, sc_hash = make_derived_contract(
             str(x_name), str(y_name), args.x_sense, args.y_sense, str(source)
         )
         report["score_contract"] = sc
         report["score_contract_hash"] = sc_hash
 
+        grep_line = (
+            f"identity_sha256={report['identity_sha256']} "
+            f"rows_in={report['n']} front_rows={report['front_size']}"
+        )
         if as_json:
             print(json.dumps(report))
         else:
+            print(grep_line)
             print(
                 f"[pair_sieve] n={report['n']} wall_ms={report['wall_ms']:.3f} "
                 f"front_size={report['front_size']} identity_ok={report['identity_ok']} "
                 f"strategy={report['strategy']} promote_ready={report['promote_ready']}"
             )
 
-        def write_front_and_report(dest: Path, *, write_ranks: bool = False) -> None:
+        def write_front_and_report(dest: Path, *, write_ranks: bool = False, sealed: bool = False) -> None:
             dest.mkdir(parents=True, exist_ok=True)
             if write_ranks:
                 np.save(dest / "ranks.npy", ranks)
-            (dest / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+            payload = seal_report(report) if sealed else report
+            (dest / "report.json").write_text(json.dumps(payload, indent=2) + "\n")
             rank1 = set(int(i) for i in np.flatnonzero(np.asarray(ranks) == 1))
             front_path = dest / "front.csv"
             chi_pick_idx = report.get("chi_pick") if report.get("chi_on") else None
@@ -332,8 +357,8 @@ def main():
                 fields = list(csv_fields) + ["rank"]
                 if chi_pick_idx is not None:
                     fields.append("chi_pick")
-                with front_path.open("w", newline="") as f:
-                    w = _csv.DictWriter(f, fieldnames=fields)
+                with front_path.open("w", newline="\n") as f:
+                    w = _csv.DictWriter(f, fieldnames=fields, lineterminator="\n")
                     w.writeheader()
                     for i, row in enumerate(csv_rows):
                         if i in rank1:
@@ -343,8 +368,8 @@ def main():
                                 r["chi_pick"] = 1 if i == int(chi_pick_idx) else 0
                             w.writerow(r)
             else:
-                with front_path.open("w", newline="") as f:
-                    w = _csv.writer(f)
+                with front_path.open("w", newline="\n") as f:
+                    w = _csv.writer(f, lineterminator="\n")
                     hdr = ["idx", "x", "y", "rank"]
                     if chi_pick_idx is not None:
                         hdr.append("chi_pick")
@@ -360,7 +385,7 @@ def main():
 
         if getattr(args, "bundle", None):
             bdir = Path(args.bundle)
-            write_front_and_report(bdir, write_ranks=False)
+            write_front_and_report(bdir, write_ranks=False, sealed=True)
             lines = []
             for name in ("front.csv", "report.json"):
                 p = bdir / name

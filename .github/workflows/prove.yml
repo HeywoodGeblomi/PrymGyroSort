@@ -51,6 +51,17 @@ jobs:
           echo "book verify_bundle exit 0"
           python3 -c "import json; r=json.load(open('/tmp/book_bundle/report.json')); assert r.get('identity_ok') is True; print('book identity_sha256=', r.get('identity_sha256')); print('promote_ready=', r.get('promote_ready'))"
 
+      - name: golden lock book
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          python3 python/pair_sieve_cli.py --csv examples/book.csv --x-col risk --y-col cost --bundle /tmp/book
+          python3 python/verify_bundle.py /tmp/book
+          python3 python/verify_bundle.py artifacts/golden/book
+          diff -u artifacts/golden/book/front.csv /tmp/book/front.csv
+          python3 python/verify_golden.py
+          sha256sum -c artifacts/golden/book.sha256
+          python3 -c "import json; r=json.load(open('/tmp/book/report.json')); assert 'chi_on' not in r or r.get('chi_on') is not True; assert r.get('strategy')=='Fenwick2D'; assert r.get('identity_mode')=='fenwick_oracle'; assert 'wall_ms' not in r"
+
       - name: California stranger sealed bundle + verify
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
