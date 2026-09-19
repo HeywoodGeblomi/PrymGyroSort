@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "version": "0.6.3-score-contract",
+  "n": 250,
+  "front_size": 7,
+  "k": 1,
+  "identity_sha256": "968b5b2b85e9c402664f05a44b240ae657b70a57d56ef59e392cd567b12e0121",
+  "identity_ok": true,
+  "identity_mode": "fenwick_oracle",
+  "strategy": "Fenwick2D",
+  "promote_ready": true,
+  "source": "csv:examples/book.csv",
+  "x_col": "risk",
+  "y_col": "cost",
+  "x_sense": "lower",
+  "y_sense": "lower",
+  "csv": "examples/book.csv",
+  "score_contract": {
+    "schema_version": "0.1.0",
+    "axes": [
+      {
+        "name": "risk",
+        "sense": "lower",
+        "formula_or_procedure_id": "cli:csv:examples/book.csv"
+      },
+      {
+        "name": "cost",
+        "sense": "lower",
+        "formula_or_procedure_id": "cli:csv:examples/book.csv"
+      }
+    ],
+    "score_kind": "observed",
+    "hash_alg": "sha256",
+    "derived": true
+  },
+  "score_contract_hash": "84464d1437071dd244e9ff5c8c9a29cd20f9a377689aee401e3ed5d08330c8b0"
+}
