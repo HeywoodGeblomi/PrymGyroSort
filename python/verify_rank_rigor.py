@@ -83,6 +83,10 @@ def main():
         ("all_identical", np.ones((30, 2))),
         ("antichain_ND", np.column_stack([np.linspace(0,1,40), np.linspace(1,0,40)])),
         ("total_chain", np.column_stack([np.linspace(0,1,40), np.linspace(0,1,40)])),
+        ("identical_xy", np.array([[1.0, 1.0], [1.0, 1.0]])),
+        # Negated A1209 (0.78, 2.657) vs A3715 (0.78, 2.548), higher-is-better.
+        ("same_x_better_y", np.array([[-0.78, -2.657], [-0.78, -2.548]])),
+        ("smaller_x_equal_y", np.array([[0.0, 0.0], [1.0, 0.0]])),
     ]
     X = rng.random((60, 2)); X[::3, 0] = X[0, 0]
     cases.append(("dup_x", X))

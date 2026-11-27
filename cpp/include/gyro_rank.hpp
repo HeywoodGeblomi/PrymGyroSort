@@ -153,11 +153,19 @@ inline void exact_rank_2d_fenwick(const double* matrix, uint32_t n, uint32_t m,
     FenwickMax fenwick(max_y + 2);
     FenwickSum fenwick_cnt(max_y + 2);
 
+    // Batch identical (x, y), not merely equal x. The query stays the inclusive
+    // prefix_max(yr), so a strictly smaller x with the same y still dominates.
+    // Flushing when (x, y) changes lets a same-x, strictly better y dominate
+    // the next row. Identical points in one batch do not see each other.
+    // An exclusive prefix (yr - 1) would miss smaller-x/equal-y dominance.
     uint32_t i = 0;
     while (i < n) {
         uint32_t j = i;
-        double x0 = matrix[order[i] * m + 0];
-        while (j < n && matrix[order[j] * m + 0] == x0) ++j;
+        const double x0 = matrix[order[i] * m + 0];
+        const double y0 = matrix[order[i] * m + 1];
+        while (j < n
+               && matrix[order[j] * m + 0] == x0
+               && matrix[order[j] * m + 1] == y0) ++j;
 
         for (uint32_t k = i; k < j; ++k) {
             uint32_t idx = order[k];

@@ -15,7 +15,7 @@ CLI = ROOT / "python" / "pair_sieve_cli.py"
 VERIFY = ROOT / "python" / "verify_bundle.py"
 BOOK = ROOT / "examples" / "book.csv"
 GYRO = ROOT / "cpp" / "include" / "gyro_rank.hpp"
-GYRO_SHA = "e1b5433aa1113e90f761acccc6960736aedf3d07051474686f2380dd9a1ce080"
+GYRO_SHA = "d48dff86819404bf8de472e24d265cd156677ae55ab2e987c8b0d6bc0d53b996"
 
 
 def run(cmd, **kw):

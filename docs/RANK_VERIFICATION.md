@@ -41,7 +41,10 @@ Domination-count ranks match only on chains/identical (expected).
 1. **Gate misfire:** `sortedness_0 > 0.97 && n < 4096` selected `Insertion1D` for M=2
    (broke antichains / monotone obj0). **Fix:** `Insertion1D` only when `m ≤ 1`.
 2. **Equal-x batching:** same-x points never saw each other → weak dominance on y
-   missed. **Fix:** sequential update in (x,y) order with exclusive y prefix query.
+   missed. **Fix:** batch identical `(x, y)` pairs and flush the Fenwick updates
+   when that pair changes, keeping the inclusive `prefix_max(yr)` query. An
+   exclusive y prefix (`prefix_max(yr - 1)`) misses smaller-x/equal-y dominance,
+   for example `(0, 0)` versus `(1, 0)`, which must be layers 1 and 2.
 
 ## Non-claims
 
