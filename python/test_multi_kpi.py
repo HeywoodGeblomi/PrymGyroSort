@@ -10,6 +10,8 @@ import argparse
 import copy
 import csv
 import hashlib
+import json
+import subprocess
 import sys
 import tempfile
 import time
@@ -80,10 +82,15 @@ def main() -> int:
     args = parser.parse_args()
     fails: list[str] = []
 
-    if DEFAULT_POLICY != "strict_cap" or DEFAULT_TIEBREAK != "input_index":
-        fails.append(f"default {DEFAULT_POLICY} {DEFAULT_TIEBREAK}")
+    from multi_kpi import normalize_policy
+    if DEFAULT_POLICY != "include_all_tied":
+        fails.append(f"default {DEFAULT_POLICY}")
+    elif normalize_policy(None, None) != ("include_all_tied", "none"):
+        fails.append(f"normalize default {normalize_policy(None, None)}")
+    elif normalize_policy("strict_cap", None) != ("strict_cap", DEFAULT_TIEBREAK):
+        fails.append("strict_cap tiebreak default")
     else:
-        print("PASS default policy strict_cap / input_index")
+        print("PASS default policy include_all_tied; strict_cap still uses input_index")
 
     with BOOK.open(newline="") as f:
         book_rows = list(csv.DictReader(f))
@@ -233,8 +240,12 @@ def main() -> int:
         )
         if receipt["schema_version"] != "2" or receipt["output"]["identity_sha256"] != BOOK_IDENTITY:
             fails.append("book v2 identity")
-        elif receipt["cap"]["policy"] != "strict_cap" or receipt["cap"]["tiebreak_key"] != "input_index":
+        elif receipt["cap"]["policy"] != "include_all_tied" or receipt["cap"]["tiebreak_key"] != "none":
             fails.append(f"book v2 default cap {receipt['cap']}")
+        elif receipt["cap"]["permutation_invariant"] is not True:
+            fails.append("default receipt not marked order-independent")
+        elif receipt["cap"]["selected_count"] != 7 or receipt["cap"]["boundary_rows"] != 7:
+            fails.append(f"book default selection {receipt['cap']}")
         elif receipt["input"]["kpi_count"] != 2:
             fails.append("book kpi_count")
         else:
@@ -254,14 +265,41 @@ def main() -> int:
                 )
 
         wrong = copy.deepcopy(receipt)
-        wrong["cap"]["policy"] = "include_all_tied"
-        wrong["cap"]["tiebreak_key"] = "none"
-        wrong["cap"]["permutation_invariant"] = True
+        wrong["cap"]["policy"] = "strict_cap"
+        wrong["cap"]["tiebreak_key"] = "input_index"
+        wrong["cap"]["permutation_invariant"] = False
         wrong_fails = verify_receipt(wrong, csv_path=book_csv)
         if not any("cap" in item for item in wrong_fails):
             fails.append(f"wrong policy was accepted {wrong_fails}")
         else:
             print(f"PASS verifier rejected wrong policy ({wrong_fails[0]})")
+
+        cli_out = td / "cli_default.json"
+        cli = subprocess.run(
+            [
+                sys.executable, str(ROOT / "python" / "pair_sieve_cli.py"),
+                "--csv", str(BOOK),
+                "--x-col", "risk",
+                "--y-col", "cost",
+                "--x-sense", "lower",
+                "--y-sense", "lower",
+                "--cap", "4",
+                "--receipt", str(cli_out),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        if cli.returncode != 0 or BOOK_IDENTITY not in cli.stdout:
+            fails.append(f"cli default receipt {cli.returncode} {cli.stderr}")
+        else:
+            cli_receipt = json.loads(cli_out.read_text())
+            if cli_receipt["cap"]["policy"] != "include_all_tied" or cli_receipt["schema_version"] != "2":
+                fails.append(f"cli receipt policy {cli_receipt.get('cap')}")
+            elif verify_receipt(cli_receipt, csv_path=BOOK):
+                fails.append(f"cli receipt verify {verify_receipt(cli_receipt, csv_path=BOOK)}")
+            else:
+                print("PASS CLI default receipt records include_all_tied")
 
         # k=3 receipt on a small CSV, all three counts zero.
         k3_path = td / "k3.csv"

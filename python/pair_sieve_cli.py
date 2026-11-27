@@ -243,6 +243,18 @@ def main():
         default=None,
         help="write a run receipt JSON to this path (default off; does not change rank bytes)",
     )
+    ap.add_argument(
+        "--cap",
+        type=int,
+        default=None,
+        help="row cap recorded on the receipt; omitted means a version-1 receipt with no cap",
+    )
+    ap.add_argument(
+        "--cap-policy",
+        default=None,
+        choices=["include_all_tied", "exclude_tied", "strict_cap"],
+        help="cap-tie policy used with --cap (default include_all_tied)",
+    )
     args = ap.parse_args()
     as_json = bool(args.json)
 
@@ -389,21 +401,33 @@ def main():
             write_front_and_report(Path(args.out), write_ranks=True)
 
         if args.receipt:
-            from receipt import build_receipt, write_receipt
             columns = [
                 {"name": str(x_name), "sense": args.x_sense},
                 {"name": str(y_name), "sense": args.y_sense},
             ]
-            row_count = len(csv_rows) if csv_rows is not None else int(report["n"])
-            receipt = build_receipt(
-                input_path=Path(args.csv) if args.csv else None,
-                row_count=row_count,
-                columns=columns,
-                ranks=ranks,
-                adjusted=Xp,
-                pair_sieve_version=VERSION,
-            )
-            write_receipt(Path(args.receipt), receipt)
+            if args.cap is None:
+                from receipt import build_receipt, write_receipt
+                row_count = len(csv_rows) if csv_rows is not None else int(report["n"])
+                receipt = build_receipt(
+                    input_path=Path(args.csv) if args.csv else None,
+                    row_count=row_count,
+                    columns=columns,
+                    ranks=ranks,
+                    adjusted=Xp,
+                    pair_sieve_version=VERSION,
+                )
+                write_receipt(Path(args.receipt), receipt)
+            else:
+                from multi_kpi import build_kpi_receipt
+                build_kpi_receipt(
+                    args.receipt,
+                    adjusted=Xp,
+                    columns=columns,
+                    pair_sieve_version=VERSION,
+                    cap=int(args.cap),
+                    policy=args.cap_policy,
+                    input_path=Path(args.csv) if args.csv else None,
+                )
 
         if getattr(args, "bundle", None):
             bdir = Path(args.bundle)
