@@ -32,6 +32,11 @@ jobs:
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
           python3 python/test_exact_rank_binding.py --offline
 
+      - name: multi-KPI and cap-tie
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          python3 python/test_multi_kpi.py --offline
+
       - name: --prove
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
