@@ -2,146 +2,705 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/HeywoodGeblomi/PrymGyroSort/python/receipt.schema.json",
   "title": "RunReceipt",
-  "description": "Hashes and counts recorded for one pair-sieve run. Not a certification.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "timestamp_utc",
-    "input",
-    "kernel",
-    "git_commit",
-    "output",
-    "dominance_verification",
-    "tools"
+  "description": "Hashes and counts recorded for one run. Not a certification. Version 1 is the two-score record. Version 2 adds the KPI count and the cap-tie policy.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/receipt_v1"
+    },
+    {
+      "$ref": "#/$defs/receipt_v2"
+    }
   ],
-  "properties": {
-    "schema_version": { "type": "string", "const": "1" },
-    "timestamp_utc": { "type": "string", "minLength": 20 },
-    "input": {
+  "$defs": {
+    "receipt_v1": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "sha256", "row_count", "columns"],
+      "required": [
+        "schema_version",
+        "timestamp_utc",
+        "input",
+        "kernel",
+        "git_commit",
+        "output",
+        "dominance_verification",
+        "tools"
+      ],
       "properties": {
-        "path": { "type": ["string", "null"] },
-        "sha256": {
-          "anyOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "schema_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "timestamp_utc": {
+          "type": "string",
+          "minLength": 20
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "row_count",
+            "columns"
+          ],
+          "properties": {
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "sense"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sense": {
+                    "type": "string",
+                    "enum": [
+                      "lower",
+                      "higher"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "kernel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_path",
+            "source_sha256",
+            "module_path",
+            "module_sha256"
+          ],
+          "properties": {
+            "source_path": {
+              "type": "string"
+            },
+            "source_sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            },
+            "module_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "module_sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            }
+          }
+        },
+        "git_commit": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "row_count": { "type": "integer", "minimum": 0 },
-        "columns": {
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "sense"],
-            "properties": {
-              "name": { "type": "string", "minLength": 1 },
-              "sense": { "type": "string", "enum": ["lower", "higher"] }
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identity_sha256",
+            "front_size",
+            "layer_count"
+          ],
+          "properties": {
+            "identity_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "front_size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "layer_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "dominance_verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "vectors",
+            "locks",
+            "rank_lock_violations",
+            "layer_separation_violations",
+            "tightness_failures",
+            "brute_force",
+            "cross_check"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "sweep_weak_dominance_v1"
+            },
+            "vectors": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "rank",
+                "layer",
+                "same_vector"
+              ],
+              "properties": {
+                "rank": {
+                  "type": "string"
+                },
+                "layer": {
+                  "type": "string"
+                },
+                "same_vector": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "locks": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rank_lock_violations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "layer_separation_violations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tightness_failures": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cross_check": {
+              "type": "string",
+              "enum": [
+                "agree",
+                "not_run",
+                "disagree"
+              ]
+            },
+            "brute_force": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "method",
+                "reason",
+                "locks",
+                "rank_lock_violations",
+                "layer_separation_violations",
+                "tightness_failures",
+                "limit_n"
+              ],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "brute_force_weak_dominance",
+                    "skipped"
+                  ]
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "locks": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "rank_lock_violations": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "layer_separation_violations": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "tightness_failures": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "limit_n": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "python",
+            "numpy",
+            "pair_sieve",
+            "platform"
+          ],
+          "properties": {
+            "python": {
+              "type": "string"
+            },
+            "numpy": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pair_sieve": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
             }
           }
         }
       }
     },
-    "kernel": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["source_path", "source_sha256", "module_path", "module_sha256"],
-      "properties": {
-        "source_path": { "type": "string" },
-        "source_sha256": {
-          "anyOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-          ]
-        },
-        "module_path": { "type": ["string", "null"] },
-        "module_sha256": {
-          "anyOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-          ]
-        }
-      }
-    },
-    "git_commit": { "type": ["string", "null"] },
-    "output": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["identity_sha256", "front_size", "layer_count"],
-      "properties": {
-        "identity_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "front_size": { "type": "integer", "minimum": 0 },
-        "layer_count": { "type": "integer", "minimum": 0 }
-      }
-    },
-    "dominance_verification": {
+    "receipt_v2": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "method",
-        "vectors",
-        "locks",
-        "rank_lock_violations",
-        "layer_separation_violations",
-        "tightness_failures",
-        "brute_force",
-        "cross_check"
+        "schema_version",
+        "timestamp_utc",
+        "input",
+        "kernel",
+        "git_commit",
+        "output",
+        "dominance_verification",
+        "tools",
+        "cap"
       ],
       "properties": {
-        "method": { "type": "string", "const": "sweep_weak_dominance_v1" },
-        "vectors": {
+        "schema_version": {
+          "type": "string",
+          "const": "2"
+        },
+        "timestamp_utc": {
+          "type": "string",
+          "minLength": 20
+        },
+        "input": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["rank", "layer", "same_vector"],
+          "required": [
+            "path",
+            "sha256",
+            "row_count",
+            "columns",
+            "kpi_count"
+          ],
           "properties": {
-            "rank": { "type": "string" },
-            "layer": { "type": "string" },
-            "same_vector": { "type": "boolean" }
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "sense"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sense": {
+                    "type": "string",
+                    "enum": [
+                      "lower",
+                      "higher"
+                    ]
+                  }
+                }
+              }
+            },
+            "kpi_count": {
+              "type": "integer",
+              "minimum": 2
+            }
           }
         },
-        "locks": { "type": "integer", "minimum": 0 },
-        "rank_lock_violations": { "type": "integer", "minimum": 0 },
-        "layer_separation_violations": { "type": "integer", "minimum": 0 },
-        "tightness_failures": { "type": "integer", "minimum": 0 },
-        "cross_check": { "type": "string", "enum": ["agree", "not_run", "disagree"] },
-        "brute_force": {
+        "kernel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_path",
+            "source_sha256",
+            "module_path",
+            "module_sha256"
+          ],
+          "properties": {
+            "source_path": {
+              "type": "string"
+            },
+            "source_sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            },
+            "module_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "module_sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            }
+          }
+        },
+        "git_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identity_sha256",
+            "front_size",
+            "layer_count",
+            "rank_method",
+            "rank_complexity"
+          ],
+          "properties": {
+            "identity_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "front_size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "layer_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rank_method": {
+              "type": "string",
+              "enum": [
+                "exact_rank_2d_fenwick",
+                "dominance_graph_v1"
+              ]
+            },
+            "rank_complexity": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "dominance_verification": {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "method",
-            "reason",
+            "vectors",
             "locks",
             "rank_lock_violations",
             "layer_separation_violations",
             "tightness_failures",
-            "limit_n"
+            "brute_force",
+            "cross_check",
+            "complexity"
           ],
           "properties": {
-            "method": { "type": "string", "enum": ["brute_force_weak_dominance", "skipped"] },
-            "reason": { "type": ["string", "null"] },
-            "locks": { "type": ["integer", "null"], "minimum": 0 },
-            "rank_lock_violations": { "type": ["integer", "null"], "minimum": 0 },
-            "layer_separation_violations": { "type": ["integer", "null"], "minimum": 0 },
-            "tightness_failures": { "type": ["integer", "null"], "minimum": 0 },
-            "limit_n": { "type": "integer", "minimum": 1 }
+            "method": {
+              "type": "string",
+              "enum": [
+                "sweep_weak_dominance_v1",
+                "pair_weak_dominance_v1"
+              ]
+            },
+            "vectors": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "rank",
+                "layer",
+                "same_vector"
+              ],
+              "properties": {
+                "rank": {
+                  "type": "string"
+                },
+                "layer": {
+                  "type": "string"
+                },
+                "same_vector": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "locks": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rank_lock_violations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "layer_separation_violations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tightness_failures": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cross_check": {
+              "type": "string",
+              "enum": [
+                "agree",
+                "not_run",
+                "disagree"
+              ]
+            },
+            "brute_force": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "method",
+                "reason",
+                "locks",
+                "rank_lock_violations",
+                "layer_separation_violations",
+                "tightness_failures",
+                "limit_n"
+              ],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "brute_force_weak_dominance",
+                    "skipped"
+                  ]
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "locks": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "rank_lock_violations": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "layer_separation_violations": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "tightness_failures": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "limit_n": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "complexity": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "python",
+            "numpy",
+            "pair_sieve",
+            "platform"
+          ],
+          "properties": {
+            "python": {
+              "type": "string"
+            },
+            "numpy": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pair_sieve": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            }
+          }
+        },
+        "cap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "policy",
+            "tiebreak_key",
+            "boundary_rows",
+            "selected_count",
+            "selection_sha256",
+            "permutation_invariant"
+          ],
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              ]
+            },
+            "policy": {
+              "type": "string",
+              "enum": [
+                "include_all_tied",
+                "exclude_tied",
+                "strict_cap"
+              ]
+            },
+            "tiebreak_key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "boundary_rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "selected_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "selection_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "permutation_invariant": {
+              "type": "boolean"
+            }
           }
         }
-      }
-    },
-    "tools": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["python", "numpy", "pair_sieve", "platform"],
-      "properties": {
-        "python": { "type": "string" },
-        "numpy": { "type": ["string", "null"] },
-        "pair_sieve": { "type": "string" },
-        "platform": { "type": "string" }
       }
     }
   }

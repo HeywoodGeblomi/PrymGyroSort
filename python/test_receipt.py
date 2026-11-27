@@ -166,8 +166,15 @@ def check_housing_receipt(fails: list[str]) -> None:
 def main() -> int:
     fails = []
     schema = json.loads((ROOT / "python" / "receipt.schema.json").read_text())
-    if schema.get("properties", {}).get("schema_version", {}).get("const") != "1":
+    defs = schema.get("$defs") or {}
+    v1 = defs.get("receipt_v1") or {}
+    v2 = defs.get("receipt_v2") or {}
+    if v1.get("properties", {}).get("schema_version", {}).get("const") != "1":
         fails.append("schema_version const")
+    if v2.get("properties", {}).get("schema_version", {}).get("const") != "2":
+        fails.append("schema v2 const")
+    if v1.get("properties", {}).get("input", {}).get("properties", {}).get("columns", {}).get("maxItems") != 2:
+        fails.append("v1 column cap")
 
     with tempfile.TemporaryDirectory(prefix="pgs_rcpt_") as td:
         td = Path(td)
