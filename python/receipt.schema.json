@@ -82,13 +82,26 @@
     "dominance_verification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["method", "reason", "locks", "violations", "limit_n"],
+      "required": ["method", "locks", "violations", "tightness_failures", "brute_force", "cross_check"],
       "properties": {
-        "method": { "type": "string", "enum": ["brute_force_weak_dominance", "skipped"] },
-        "reason": { "type": ["string", "null"] },
-        "locks": { "type": ["integer", "null"], "minimum": 0 },
-        "violations": { "type": ["integer", "null"], "minimum": 0 },
-        "limit_n": { "type": "integer", "minimum": 1 }
+        "method": { "type": "string", "const": "sweep_weak_dominance_v1" },
+        "locks": { "type": "integer", "minimum": 0 },
+        "violations": { "type": "integer", "minimum": 0 },
+        "tightness_failures": { "type": "integer", "minimum": 0 },
+        "cross_check": { "type": "string", "enum": ["agree", "not_run", "disagree"] },
+        "brute_force": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "reason", "locks", "violations", "tightness_failures", "limit_n"],
+          "properties": {
+            "method": { "type": "string", "enum": ["brute_force_weak_dominance", "skipped"] },
+            "reason": { "type": ["string", "null"] },
+            "locks": { "type": ["integer", "null"], "minimum": 0 },
+            "violations": { "type": ["integer", "null"], "minimum": 0 },
+            "tightness_failures": { "type": ["integer", "null"], "minimum": 0 },
+            "limit_n": { "type": "integer", "minimum": 1 }
+          }
+        }
       }
     },
     "tools": {

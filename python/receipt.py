@@ -57,32 +57,170 @@ def weakly_dominates(a, b) -> bool:
     return (a[0] <= b[0] and a[1] <= b[1]) and (a[0] < b[0] or a[1] < b[1])
 
 
+SWEEP_METHOD = "sweep_weak_dominance_v1"
+
+
+class _Bit2D:
+    """Sparse 2D Fenwick tree. Both axes are 1-based inclusive prefix sums."""
+
+    def __init__(self, nx: int, ny: int):
+        self.nx = nx
+        self.ny = ny
+        self.rows: dict[int, dict[int, int]] = {}
+
+    def add(self, x: int, y: int, delta: int) -> None:
+        while x <= self.nx:
+            row = self.rows.get(x)
+            if row is None:
+                row = {}
+                self.rows[x] = row
+            yy = y
+            while yy <= self.ny:
+                row[yy] = row.get(yy, 0) + delta
+                yy += yy & -yy
+            x += x & -x
+
+    def prefix(self, x: int, y: int) -> int:
+        total = 0
+        while x > 0:
+            row = self.rows.get(x)
+            if row:
+                yy = y
+                while yy > 0:
+                    total += row.get(yy, 0)
+                    yy -= yy & -yy
+            x -= x & -x
+        return total
+
+
+def brute_pair_check(X: np.ndarray, ranks: np.ndarray) -> tuple[int, int, int]:
+    """Ordered dominating pairs, pair violations, and rows that skip a layer."""
+    n = int(X.shape[0])
+    locks = 0
+    violations = 0
+    tightness_failures = 0
+    rank_list = [int(v) for v in ranks]
+    for i in range(n):
+        ri = rank_list[i]
+        has_prev = False
+        xi0, xi1 = float(X[i, 0]), float(X[i, 1])
+        for j in range(n):
+            if i == j:
+                continue
+            xj0, xj1 = float(X[j, 0]), float(X[j, 1])
+            if (xj0 <= xi0 and xj1 <= xi1) and (xj0 < xi0 or xj1 < xi1):
+                locks += 1
+                rj = rank_list[j]
+                if rj >= ri:
+                    violations += 1
+                if ri > 1 and rj == ri - 1:
+                    has_prev = True
+        if ri > 1 and not has_prev:
+            tightness_failures += 1
+    return locks, violations, tightness_failures
+
+
+def sweep_weak_dominance(X: np.ndarray, ranks: np.ndarray) -> dict:
+    """Count locks, rank violations, and tightness gaps in O(n log n) memory.
+
+    Points are swept in (x, y, index) order. A Fenwick query sees every
+    already-inserted point with y' <= y. Inserts are flushed only when the
+    (x, y) pair changes, so identical rows do not dominate each other, a
+    same-x better y does, and a smaller x with the same y does.
+    """
+    n = int(X.shape[0])
+    empty = {"locks": 0, "violations": 0, "tightness_failures": 0}
+    if n == 0:
+        return empty
+    xs = np.asarray(X[:, 0], dtype=np.float64)
+    ys = np.asarray(X[:, 1], dtype=np.float64)
+    rank_list = [int(v) for v in np.asarray(ranks).reshape(-1)]
+    if len(rank_list) != n:
+        raise ValueError("ranks length does not match rows")
+    y_values = np.unique(ys)
+    y_index = {float(v): i + 1 for i, v in enumerate(y_values.tolist())}
+    rank_values = sorted(set(rank_list))
+    rank_index = {v: i + 1 for i, v in enumerate(rank_values)}
+    bit = _Bit2D(len(y_values), len(rank_values))
+    order = np.lexsort((np.arange(n), ys, xs))
+    locks = 0
+    violations = 0
+    tightness_failures = 0
+
+    def query(y_pos: int, rank_pos: int) -> int:
+        if rank_pos <= 0:
+            return 0
+        return bit.prefix(y_pos, rank_pos)
+
+    i = 0
+    while i < n:
+        j = i + 1
+        xi = float(xs[order[i]])
+        yi = float(ys[order[i]])
+        while j < n and float(xs[order[j]]) == xi and float(ys[order[j]]) == yi:
+            j += 1
+        y_pos = y_index[yi]
+        for k in range(i, j):
+            idx = int(order[k])
+            ri = rank_list[idx]
+            rpos = rank_index[ri]
+            dominators = query(y_pos, len(rank_values))
+            bad = dominators - query(y_pos, rpos - 1)
+            prev = query(y_pos, rank_index[ri - 1]) - query(y_pos, rank_index[ri - 1] - 1) if (ri - 1) in rank_index else 0
+            locks += dominators
+            violations += bad
+            if ri > 1 and prev == 0:
+                tightness_failures += 1
+        for k in range(i, j):
+            idx = int(order[k])
+            bit.add(y_index[yi], rank_index[rank_list[idx]], 1)
+        i = j
+    return {
+        "locks": locks,
+        "violations": violations,
+        "tightness_failures": tightness_failures,
+    }
+
+
 def dominance_check(X: np.ndarray, ranks: np.ndarray) -> dict:
+    sweep = sweep_weak_dominance(X, ranks)
     n = int(X.shape[0])
     if n > BRUTE_PAIR_LIMIT:
-        return {
+        brute = {
             "method": "skipped",
             "reason": f"row_count {n} exceeds brute-force pair-check limit {BRUTE_PAIR_LIMIT}",
             "locks": None,
             "violations": None,
+            "tightness_failures": None,
             "limit_n": BRUTE_PAIR_LIMIT,
         }
-    locks = 0
-    violations = 0
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                continue
-            if weakly_dominates(X[j], X[i]):
-                locks += 1
-                if not (int(ranks[j]) < int(ranks[i])):
-                    violations += 1
+        cross = "not_run"
+    else:
+        locks, violations, tight = brute_pair_check(X, ranks)
+        brute = {
+            "method": "brute_force_weak_dominance",
+            "reason": None,
+            "locks": locks,
+            "violations": violations,
+            "tightness_failures": tight,
+            "limit_n": BRUTE_PAIR_LIMIT,
+        }
+        cross = (
+            "agree"
+            if (
+                locks == sweep["locks"]
+                and violations == sweep["violations"]
+                and tight == sweep["tightness_failures"]
+            )
+            else "disagree"
+        )
     return {
-        "method": "brute_force_weak_dominance",
-        "reason": None,
-        "locks": locks,
-        "violations": violations,
-        "limit_n": BRUTE_PAIR_LIMIT,
+        "method": SWEEP_METHOD,
+        "locks": sweep["locks"],
+        "violations": sweep["violations"],
+        "tightness_failures": sweep["tightness_failures"],
+        "brute_force": brute,
+        "cross_check": cross,
     }
 
 
@@ -191,14 +329,23 @@ def verify_receipt(
         if got != (receipt.get("kernel") or {}).get("source_sha256"):
             fails.append("kernel source sha256")
     dom = receipt.get("dominance_verification") or {}
-    if dom.get("method") == "brute_force_weak_dominance":
-        if dom.get("locks") is None or dom.get("violations") is None:
-            fails.append("dominance counts missing")
-    elif dom.get("method") == "skipped":
-        if not dom.get("reason"):
-            fails.append("skip reason missing")
-    else:
+    if dom.get("method") != SWEEP_METHOD:
         fails.append("dominance method")
+    if dom.get("locks") is None or dom.get("violations") is None or dom.get("tightness_failures") is None:
+        fails.append("sweep counts missing")
+    brute = dom.get("brute_force") or {}
+    if brute.get("method") == "brute_force_weak_dominance":
+        if brute.get("locks") is None or brute.get("violations") is None:
+            fails.append("brute counts missing")
+        if dom.get("cross_check") != "agree":
+            fails.append("sweep and brute disagree")
+    elif brute.get("method") == "skipped":
+        if not brute.get("reason"):
+            fails.append("brute skip reason missing")
+        if dom.get("cross_check") != "not_run":
+            fails.append("cross_check")
+    else:
+        fails.append("brute method")
     out = receipt.get("output") or {}
     if not out.get("identity_sha256") or out.get("front_size") is None or out.get("layer_count") is None:
         fails.append("output fields")
@@ -230,9 +377,14 @@ def _rerun_checks(receipt: dict, csv_path: Path) -> list[str]:
         fails.append("layer_count mismatch on rerun")
     dom = dominance_check(X, ranks)
     recorded = receipt["dominance_verification"]
-    if dom["method"] != recorded.get("method"):
-        fails.append("dominance method mismatch on rerun")
-    elif dom["method"] == "brute_force_weak_dominance":
-        if dom["locks"] != recorded.get("locks") or dom["violations"] != recorded.get("violations"):
-            fails.append("dominance counts mismatch on rerun")
+    for key in ("method", "locks", "violations", "tightness_failures", "cross_check"):
+        if dom.get(key) != recorded.get(key):
+            fails.append(f"dominance {key} mismatch on rerun")
+            break
+    bgot = dom.get("brute_force") or {}
+    brec = recorded.get("brute_force") or {}
+    for key in ("method", "locks", "violations", "tightness_failures"):
+        if bgot.get(key) != brec.get(key):
+            fails.append(f"brute {key} mismatch on rerun")
+            break
     return fails

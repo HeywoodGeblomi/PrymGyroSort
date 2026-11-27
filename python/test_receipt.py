@@ -6,9 +6,14 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "python"))
+from receipt import brute_pair_check, sweep_weak_dominance  # noqa: E402
 CLI = ROOT / "python" / "pair_sieve_cli.py"
 VERIFY = ROOT / "python" / "verify_receipt.py"
 BOOK = ROOT / "examples" / "book.csv"
@@ -17,6 +22,111 @@ BOOK_IDENTITY = "968b5b2b85e9c402664f05a44b240ae657b70a57d56ef59e392cd567b12e012
 
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+
+
+def _agree(name: str, X: np.ndarray, ranks: np.ndarray, fails: list[str]) -> None:
+    sweep = sweep_weak_dominance(X, ranks)
+    locks, violations, tight = brute_pair_check(X, ranks)
+    if (sweep["locks"], sweep["violations"], sweep["tightness_failures"]) != (locks, violations, tight):
+        fails.append(f"{name} sweep {sweep} brute {(locks, violations, tight)}")
+    else:
+        print(f"PASS agree {name}: locks={locks} violations={violations} tight={tight}")
+
+
+def check_sweep_against_brute(fails: list[str]) -> None:
+    from prym_gyro import rank as native_rank
+
+    import csv
+    with BOOK.open(newline="") as f:
+        book = np.array(
+            [[float(r["risk"]), float(r["cost"])] for r in csv.DictReader(f)],
+            dtype=np.float64,
+        )
+    book_ranks = native_rank(np.ascontiguousarray(book, dtype=np.float64))
+    _agree("book", book, book_ranks, fails)
+
+    from sklearn.datasets import fetch_openml
+    ab = fetch_openml(name="abalone", version=1, as_frame=False, parser="liac-arff")
+    names = list(ab.feature_names)
+    cols = np.column_stack([
+        -np.asarray(ab.data[:, names.index("Length")], dtype=np.float64),
+        -np.asarray(ab.data[:, names.index("Whole_weight")], dtype=np.float64),
+    ])
+    ab_ranks = native_rank(np.ascontiguousarray(cols, dtype=np.float64))
+    _agree("abalone", cols, ab_ranks, fails)
+
+    for seed in range(12):
+        rng = np.random.default_rng(seed)
+        n = 60
+        grid = np.column_stack([
+            rng.integers(0, 6, size=n),
+            rng.integers(0, 6, size=n),
+        ]).astype(np.float64)
+        # Repeat rows so identical coordinates are common.
+        grid = np.vstack([grid, grid[:15]])
+        got = native_rank(np.ascontiguousarray(grid, dtype=np.float64))
+        _agree(f"ties_seed_{seed}", grid, got, fails)
+
+    violation = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
+    bad_ranks = np.array([1, 1], dtype=np.int32)
+    sweep = sweep_weak_dominance(violation, bad_ranks)
+    if sweep["violations"] < 1 or sweep["tightness_failures"] != 0:
+        fails.append(f"injected violation not detected: {sweep}")
+    else:
+        print(f"PASS injected violation: {sweep}")
+
+    skipped = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
+    skip_ranks = np.array([1, 3], dtype=np.int32)
+    sweep = sweep_weak_dominance(skipped, skip_ranks)
+    if sweep["tightness_failures"] < 1 or sweep["violations"] != 0:
+        fails.append(f"injected tightness break not detected: {sweep}")
+    else:
+        print(f"PASS injected tightness: {sweep}")
+
+
+def check_housing_receipt(fails: list[str]) -> None:
+    src = Path("/tmp/housing10k_c76.csv")
+    if not src.is_file():
+        fails.append("rebuilt 10k housing csv missing")
+        return
+    out = Path("/tmp/housing_receipt_sweep.json")
+    t0 = time.perf_counter()
+    result = run([
+        sys.executable, str(CLI),
+        "--csv", str(src),
+        "--x-col", "median_income",
+        "--y-col", "median_house_value",
+        "--x-sense", "higher",
+        "--y-sense", "higher",
+        "--receipt", str(out),
+    ])
+    elapsed = time.perf_counter() - t0
+    if result.returncode != 0:
+        fails.append(f"housing receipt run failed: {result.stderr}")
+        return
+    receipt = json.loads(out.read_text())
+    dom = receipt["dominance_verification"]
+    if dom["method"] != "sweep_weak_dominance_v1" or dom["brute_force"]["method"] != "skipped":
+        fails.append(f"housing dominance block {dom}")
+    if dom["violations"] != 0 or dom["tightness_failures"] != 0:
+        fails.append(f"housing sweep not clean: {dom}")
+    checked = run([sys.executable, str(VERIFY), str(out), "--csv", str(src)])
+    if checked.returncode != 0:
+        fails.append(f"housing verifier failed: {checked.stderr}")
+    else:
+        from pair_sieve_cli import apply_senses, load_csv
+        from prym_gyro import rank as native_rank
+        matrix, _, _, _, _ = load_csv(src, "median_income", "median_house_value")
+        matrix = apply_senses(matrix, "higher", "higher")
+        got = native_rank(matrix)
+        t_check = time.perf_counter()
+        sweep_weak_dominance(matrix, got)
+        check_s = time.perf_counter() - t_check
+        print(
+            f"PASS housing receipt verified violations={dom['violations']} "
+            f"tightness_failures={dom['tightness_failures']} locks={dom['locks']} "
+            f"sweep_seconds={check_s:.4f} cli_seconds={elapsed:.3f}"
+        )
 
 
 def main() -> int:
@@ -55,10 +165,13 @@ def main() -> int:
                 fails.append("receipts differ aside from timestamp")
             if ja["output"]["identity_sha256"] != BOOK_IDENTITY:
                 fails.append(f"receipt identity {ja['output']['identity_sha256']}")
-            if ja["dominance_verification"]["method"] != "brute_force_weak_dominance":
+            dom = ja["dominance_verification"]
+            if dom["method"] != "sweep_weak_dominance_v1":
                 fails.append("book dominance method")
-            if ja["dominance_verification"]["violations"] != 0:
-                fails.append("book dominance violations")
+            if dom["violations"] != 0 or dom["tightness_failures"] != 0:
+                fails.append("book sweep counts")
+            if dom["cross_check"] != "agree" or dom["brute_force"]["locks"] != 15890:
+                fails.append(f"book cross-check {dom['cross_check']} {dom['brute_force']}")
             ok = run([sys.executable, str(VERIFY), str(a), "--csv", str(BOOK)])
             if ok.returncode != 0:
                 fails.append(f"verifier rejected clean receipt: {ok.stderr}")
@@ -69,6 +182,9 @@ def main() -> int:
             bad_run = run([sys.executable, str(VERIFY), str(bad), "--csv", str(BOOK)])
             if bad_run.returncode == 0:
                 fails.append("verifier accepted tampered input hash")
+
+    check_sweep_against_brute(fails)
+    check_housing_receipt(fails)
 
     if fails:
         for item in fails:
