@@ -27,6 +27,11 @@ jobs:
           cd python/bindings
           python3 setup.py build_ext --inplace
 
+      - name: two-array Fenwick binding
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
+          python3 python/test_exact_rank_binding.py --offline
+
       - name: --prove
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}/python:${GITHUB_WORKSPACE}/python/bindings"
