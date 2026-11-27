@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/HeywoodGeblomi/PrymGyroSort/python/receipt.schema.json",
+  "title": "RunReceipt",
+  "description": "Hashes and counts recorded for one pair-sieve run. Not a certification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "timestamp_utc",
+    "input",
+    "kernel",
+    "git_commit",
+    "output",
+    "dominance_verification",
+    "tools"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1" },
+    "timestamp_utc": { "type": "string", "minLength": 20 },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "row_count", "columns"],
+      "properties": {
+        "path": { "type": ["string", "null"] },
+        "sha256": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          ]
+        },
+        "row_count": { "type": "integer", "minimum": 0 },
+        "columns": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "sense"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "sense": { "type": "string", "enum": ["lower", "higher"] }
+            }
+          }
+        }
+      }
+    },
+    "kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path", "source_sha256", "module_path", "module_sha256"],
+      "properties": {
+        "source_path": { "type": "string" },
+        "source_sha256": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          ]
+        },
+        "module_path": { "type": ["string", "null"] },
+        "module_sha256": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          ]
+        }
+      }
+    },
+    "git_commit": { "type": ["string", "null"] },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_sha256", "front_size", "layer_count"],
+      "properties": {
+        "identity_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "front_size": { "type": "integer", "minimum": 0 },
+        "layer_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "dominance_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "reason", "locks", "violations", "limit_n"],
+      "properties": {
+        "method": { "type": "string", "enum": ["brute_force_weak_dominance", "skipped"] },
+        "reason": { "type": ["string", "null"] },
+        "locks": { "type": ["integer", "null"], "minimum": 0 },
+        "violations": { "type": ["integer", "null"], "minimum": 0 },
+        "limit_n": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "numpy", "pair_sieve", "platform"],
+      "properties": {
+        "python": { "type": "string" },
+        "numpy": { "type": ["string", "null"] },
+        "pair_sieve": { "type": "string" },
+        "platform": { "type": "string" }
+      }
+    }
+  }
+}
