@@ -62,4 +62,59 @@ def rank_fenwick_ref(matrix: np.ndarray) -> np.ndarray:
     return ranks
 
 
-__all__ = ["rank", "rank_report", "rank_fenwick_ref"]
+def exact_rank_2d(xs, ys) -> np.ndarray:
+    """Rank two score arrays with exact_rank_2d_fenwick.
+
+    xs and ys may be numpy arrays or lists. Lower is better, matching the
+    kernel. Returns a new int32 rank/layer vector of the same length.
+    """
+    x = np.ascontiguousarray(xs, dtype=np.float64).reshape(-1)
+    y = np.ascontiguousarray(ys, dtype=np.float64).reshape(-1)
+    if x.shape[0] != y.shape[0]:
+        raise ValueError(f"xs and ys length mismatch: {x.shape[0]} vs {y.shape[0]}")
+    return np.asarray(_native.exact_rank_2d(x, y), dtype=np.int32)
+
+
+def kernel_times_ms(matrix: np.ndarray, reps: int) -> dict:
+    """Time exact_rank_2d_fenwick only. The matrix is already in memory."""
+    X = np.ascontiguousarray(matrix, dtype=np.float64)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError("matrix must be (N, 2)")
+    info = dict(_native.kernel_times_ms(X, int(reps)))
+    info["ranks"] = np.asarray(info["ranks"], dtype=np.int32)
+    info["times_ms"] = [float(v) for v in info["times_ms"]]
+    return info
+
+
+def write_score_receipt(path, *, xs, ys, input_path, columns, pair_sieve_version: str) -> dict:
+    """Rank xs, ys and write a receipt through receipt.py.
+
+    xs and ys are the kernel-orientation scores (lower is better). columns
+    record the names and senses of the source file.
+    """
+    from receipt import build_receipt, write_receipt
+
+    x = np.ascontiguousarray(xs, dtype=np.float64).reshape(-1)
+    y = np.ascontiguousarray(ys, dtype=np.float64).reshape(-1)
+    ranks = exact_rank_2d(x, y)
+    adjusted = np.column_stack([x, y])
+    receipt = build_receipt(
+        input_path=Path(input_path) if input_path else None,
+        row_count=int(x.shape[0]),
+        columns=columns,
+        ranks=ranks,
+        adjusted=adjusted,
+        pair_sieve_version=pair_sieve_version,
+    )
+    write_receipt(Path(path), receipt)
+    return receipt
+
+
+__all__ = [
+    "rank",
+    "rank_report",
+    "rank_fenwick_ref",
+    "exact_rank_2d",
+    "kernel_times_ms",
+    "write_score_receipt",
+]

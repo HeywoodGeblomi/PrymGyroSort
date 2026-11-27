@@ -6,8 +6,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "gyro_rank.hpp"
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
+#include <vector>
 
 namespace py = pybind11;
 
@@ -112,6 +114,67 @@ void rank_fenwick_ref(py::array matrix, py::array ranks) {
                                 static_cast<int32_t*>(rbuf.ptr), nullptr);
 }
 
+py::array_t<int32_t> exact_rank_2d(py::array_t<double> xs, py::array_t<double> ys) {
+    auto xbuf = xs.request();
+    auto ybuf = ys.request();
+    if (xbuf.ndim != 1 || ybuf.ndim != 1)
+        throw std::invalid_argument("xs and ys must be 1-D float64");
+    if (xbuf.itemsize != static_cast<ssize_t>(sizeof(double)) ||
+        ybuf.itemsize != static_cast<ssize_t>(sizeof(double)))
+        throw std::invalid_argument("xs and ys must be float64");
+    if (xbuf.strides[0] != static_cast<ssize_t>(sizeof(double)) ||
+        ybuf.strides[0] != static_cast<ssize_t>(sizeof(double)))
+        throw std::invalid_argument("xs and ys must be C-contiguous float64");
+    if (xbuf.shape[0] != ybuf.shape[0])
+        throw std::invalid_argument("xs and ys must have the same length");
+    const auto n = static_cast<uint32_t>(xbuf.shape[0]);
+    py::array_t<int32_t> ranks(static_cast<ssize_t>(n));
+    if (n == 0) return ranks;
+    std::vector<double> matrix(static_cast<size_t>(n) * 2);
+    const auto* xp = static_cast<const double*>(xbuf.ptr);
+    const auto* yp = static_cast<const double*>(ybuf.ptr);
+    for (uint32_t i = 0; i < n; ++i) {
+        matrix[static_cast<size_t>(i) * 2] = xp[i];
+        matrix[static_cast<size_t>(i) * 2 + 1] = yp[i];
+    }
+    gyro::exact_rank_2d_fenwick(matrix.data(), n, 2, ranks.mutable_data(), nullptr);
+    return ranks;
+}
+
+py::dict kernel_times_ms(py::array matrix, int reps) {
+    if (reps < 1 || reps > 1000)
+        throw std::invalid_argument("reps must be in 1..1000");
+    if (!py::isinstance<py::array_t<double>>(matrix))
+        throw std::invalid_argument("matrix must be dtype float64");
+    auto mbuf = matrix.request();
+    require_c_contiguous_matrix(mbuf);
+    const auto n = static_cast<uint32_t>(mbuf.shape[0]);
+    const auto m = static_cast<uint32_t>(mbuf.shape[1]);
+    py::array_t<int32_t> ranks(static_cast<ssize_t>(n));
+    auto* out = ranks.mutable_data();
+    if (n == 0) {
+        py::dict empty;
+        empty["times_ms"] = py::list();
+        empty["ranks"] = ranks;
+        return empty;
+    }
+    py::list times;
+    volatile int32_t sink = 0;
+    const auto* ptr = static_cast<const double*>(mbuf.ptr);
+    for (int rep = 0; rep < reps; ++rep) {
+        auto t0 = std::chrono::steady_clock::now();
+        gyro::exact_rank_2d_fenwick(ptr, n, m, out, nullptr);
+        auto t1 = std::chrono::steady_clock::now();
+        asm volatile("" : : "g"(out), "g"(sink) : "memory");
+        sink = out[0];
+        times.append(std::chrono::duration<double, std::milli>(t1 - t0).count());
+    }
+    py::dict result;
+    result["times_ms"] = times;
+    result["ranks"] = ranks;
+    return result;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(prym_gyro_native, m) {
@@ -122,4 +185,8 @@ PYBIND11_MODULE(prym_gyro_native, m) {
           py::arg("memory_pressure") = false);
     m.def("rank_fenwick_ref", &rank_fenwick_ref, py::arg("matrix"), py::arg("ranks"),
           "F3: exact_rank_2d_fenwick only — identity oracle");
+    m.def("exact_rank_2d", &exact_rank_2d, py::arg("xs"), py::arg("ys"),
+          "exact_rank_2d_fenwick on two 1-D float64 score arrays. Returns int32 ranks.");
+    m.def("kernel_times_ms", &kernel_times_ms, py::arg("matrix"), py::arg("reps"),
+          "Repeated in-memory exact_rank_2d_fenwick times, in milliseconds. No file I/O.");
 }
