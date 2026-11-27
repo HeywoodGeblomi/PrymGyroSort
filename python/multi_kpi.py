@@ -22,22 +22,23 @@ walked from 1 upward. If K lands exactly on a layer boundary, every policy
 keeps the same rows and boundary_rows is 0. If K falls inside a layer, that
 layer is the boundary and boundary_rows is its size.
 
-- include_all_tied: keep the whole boundary layer. The selection can be
-  larger than K. Permutation-invariant: the selected multiset of rows does
-  not depend on input order. tiebreak_key is "none".
-- exclude_tied: drop the whole boundary layer. The selection can be smaller
-  than K, including empty. Permutation-invariant. tiebreak_key is "none".
+- include_all_tied: keep the whole boundary layer. This is order-independent
+  and, when the table has at least one row, it does not return an empty
+  selection. It can exceed the cap. tiebreak_key is "none".
+- exclude_tied: drop the whole boundary layer. This is order-independent and
+  a hard ceiling (the selection is never larger than the cap). It can return
+  zero rows. tiebreak_key is "none".
 - strict_cap: keep every layer before the boundary, then fill the remaining
-  slots from the boundary. The default tiebreak is input_index, ascending,
-  so the same input order always yields the same rows. A named secondary key
-  is ascending raw value, then input_index. strict_cap is not
-  permutation-invariant: input_index is a position, and equal secondary keys
-  fall back to that position. Unique secondary keys do move with their rows;
-  that special case is covered by tests, and the policy is still recorded as
-  not permutation-invariant because of the index fallback.
+  slots so the selection has exactly min(cap, n) rows. It is order-independent
+  only when the tiebreak key is unique on the boundary. The tiebreak used when
+  the caller does not name one is input_index, ascending. A named secondary
+  key is ascending raw value, then input_index. Equal keys use that index, so
+  the policy is recorded as not order-independent.
 
-Default policy: strict_cap. Default tiebreak: input_index.
+Default policy: include_all_tied. strict_cap and exclude_tied stay available.
 Same input and the same policy produce the same selection mask bytes.
+Receipts that already name a policy keep that policy; this default applies
+only when the caller does not name one.
 """
 from __future__ import annotations
 
@@ -47,7 +48,7 @@ from pathlib import Path
 import numpy as np
 
 POLICIES = ("include_all_tied", "exclude_tied", "strict_cap")
-DEFAULT_POLICY = "strict_cap"
+DEFAULT_POLICY = "include_all_tied"
 DEFAULT_TIEBREAK = "input_index"
 GRAPH_METHOD = "dominance_graph_v1"
 FENWICK_METHOD = "exact_rank_2d_fenwick"
