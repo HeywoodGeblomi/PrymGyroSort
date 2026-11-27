@@ -238,6 +238,11 @@ def main():
         default=None,
         help="sealed product dir: front.csv + report.json + MANIFEST.sha256; then verify()",
     )
+    ap.add_argument(
+        "--receipt",
+        default=None,
+        help="write a run receipt JSON to this path (default off; does not change rank bytes)",
+    )
     args = ap.parse_args()
     as_json = bool(args.json)
 
@@ -382,6 +387,23 @@ def main():
 
         if args.out:
             write_front_and_report(Path(args.out), write_ranks=True)
+
+        if args.receipt:
+            from receipt import build_receipt, write_receipt
+            columns = [
+                {"name": str(x_name), "sense": args.x_sense},
+                {"name": str(y_name), "sense": args.y_sense},
+            ]
+            row_count = len(csv_rows) if csv_rows is not None else int(report["n"])
+            receipt = build_receipt(
+                input_path=Path(args.csv) if args.csv else None,
+                row_count=row_count,
+                columns=columns,
+                ranks=ranks,
+                adjusted=Xp,
+                pair_sieve_version=VERSION,
+            )
+            write_receipt(Path(args.receipt), receipt)
 
         if getattr(args, "bundle", None):
             bdir = Path(args.bundle)
