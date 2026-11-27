@@ -24,13 +24,14 @@ def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
 
 
-def _agree(name: str, X: np.ndarray, ranks: np.ndarray, fails: list[str]) -> None:
-    sweep = sweep_weak_dominance(X, ranks)
-    locks, violations, tight = brute_pair_check(X, ranks)
-    if (sweep["locks"], sweep["violations"], sweep["tightness_failures"]) != (locks, violations, tight):
-        fails.append(f"{name} sweep {sweep} brute {(locks, violations, tight)}")
+def _agree(name: str, X: np.ndarray, ranks: np.ndarray, fails: list[str], layers: np.ndarray | None = None) -> None:
+    sweep = sweep_weak_dominance(X, ranks, layers)
+    brute = brute_pair_check(X, ranks, layers)
+    keys = ("locks", "rank_lock_violations", "layer_separation_violations", "tightness_failures")
+    if tuple(sweep[k] for k in keys) != tuple(brute[k] for k in keys):
+        fails.append(f"{name} sweep {sweep} brute {brute}")
     else:
-        print(f"PASS agree {name}: locks={locks} violations={violations} tight={tight}")
+        print(f"PASS agree {name}: { {k: sweep[k] for k in keys} }")
 
 
 def check_sweep_against_brute(fails: list[str]) -> None:
@@ -67,19 +68,51 @@ def check_sweep_against_brute(fails: list[str]) -> None:
         got = native_rank(np.ascontiguousarray(grid, dtype=np.float64))
         _agree(f"ties_seed_{seed}", grid, got, fails)
 
-    violation = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
-    bad_ranks = np.array([1, 1], dtype=np.int32)
-    sweep = sweep_weak_dominance(violation, bad_ranks)
-    if sweep["violations"] < 1 or sweep["tightness_failures"] != 0:
-        fails.append(f"injected violation not detected: {sweep}")
+    # (a) A dominates B in the same layer, while rank(A) < rank(B). Breaks layer separation only.
+    same_layer = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], dtype=np.float64)
+    sweep = sweep_weak_dominance(
+        same_layer,
+        np.array([1, 2, 3], dtype=np.int32),
+        np.array([1, 2, 2], dtype=np.int32),
+    )
+    if not (sweep["rank_lock_violations"] == 0 and sweep["layer_separation_violations"] >= 1 and sweep["tightness_failures"] == 0):
+        fails.append(f"same-layer injection: {sweep}")
     else:
-        print(f"PASS injected violation: {sweep}")
+        print(f"PASS injected same layer: {sweep}")
 
-    skipped = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
-    skip_ranks = np.array([1, 3], dtype=np.int32)
-    sweep = sweep_weak_dominance(skipped, skip_ranks)
-    if sweep["tightness_failures"] < 1 or sweep["violations"] != 0:
-        fails.append(f"injected tightness break not detected: {sweep}")
+    # (b) A dominates B and is ranked above B, but A sits in a worse layer. Breaks layer separation, not rank locks.
+    worse_layer = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]], dtype=np.float64)
+    sweep = sweep_weak_dominance(
+        worse_layer,
+        np.array([1, 2, 3], dtype=np.int32),
+        np.array([1, 2, 1], dtype=np.int32),
+    )
+    if not (sweep["rank_lock_violations"] == 0 and sweep["layer_separation_violations"] >= 1):
+        fails.append(f"worse-layer injection: {sweep}")
+    else:
+        print(f"PASS injected worse layer: {sweep}")
+
+    # (c) Layers stay successive, but the rank order is swapped. Breaks rank locks only.
+    swapped = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
+    sweep = sweep_weak_dominance(
+        swapped,
+        np.array([2, 1], dtype=np.int32),
+        np.array([1, 2], dtype=np.int32),
+    )
+    if not (sweep["rank_lock_violations"] >= 1 and sweep["layer_separation_violations"] == 0 and sweep["tightness_failures"] == 0):
+        fails.append(f"rank-swap injection: {sweep}")
+    else:
+        print(f"PASS injected rank swap: {sweep}")
+
+    # (d) Layer numbers jump from 1 to 3. Breaks tightness only.
+    gap = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64)
+    sweep = sweep_weak_dominance(
+        gap,
+        np.array([1, 2], dtype=np.int32),
+        np.array([1, 3], dtype=np.int32),
+    )
+    if not (sweep["tightness_failures"] >= 1 and sweep["rank_lock_violations"] == 0 and sweep["layer_separation_violations"] == 0):
+        fails.append(f"tightness injection: {sweep}")
     else:
         print(f"PASS injected tightness: {sweep}")
 
@@ -108,7 +141,7 @@ def check_housing_receipt(fails: list[str]) -> None:
     dom = receipt["dominance_verification"]
     if dom["method"] != "sweep_weak_dominance_v1" or dom["brute_force"]["method"] != "skipped":
         fails.append(f"housing dominance block {dom}")
-    if dom["violations"] != 0 or dom["tightness_failures"] != 0:
+    if dom["rank_lock_violations"] != 0 or dom["layer_separation_violations"] != 0 or dom["tightness_failures"] != 0:
         fails.append(f"housing sweep not clean: {dom}")
     checked = run([sys.executable, str(VERIFY), str(out), "--csv", str(src)])
     if checked.returncode != 0:
@@ -123,7 +156,8 @@ def check_housing_receipt(fails: list[str]) -> None:
         sweep_weak_dominance(matrix, got)
         check_s = time.perf_counter() - t_check
         print(
-            f"PASS housing receipt verified violations={dom['violations']} "
+            f"PASS housing receipt verified rank_lock_violations={dom['rank_lock_violations']} "
+            f"layer_separation_violations={dom['layer_separation_violations']} "
             f"tightness_failures={dom['tightness_failures']} locks={dom['locks']} "
             f"sweep_seconds={check_s:.4f} cli_seconds={elapsed:.3f}"
         )
@@ -168,8 +202,10 @@ def main() -> int:
             dom = ja["dominance_verification"]
             if dom["method"] != "sweep_weak_dominance_v1":
                 fails.append("book dominance method")
-            if dom["violations"] != 0 or dom["tightness_failures"] != 0:
+            if dom["rank_lock_violations"] != 0 or dom["layer_separation_violations"] != 0 or dom["tightness_failures"] != 0:
                 fails.append("book sweep counts")
+            if not dom["vectors"]["same_vector"]:
+                fails.append("book vectors")
             if dom["cross_check"] != "agree" or dom["brute_force"]["locks"] != 15890:
                 fails.append(f"book cross-check {dom['cross_check']} {dom['brute_force']}")
             ok = run([sys.executable, str(VERIFY), str(a), "--csv", str(BOOK)])
